@@ -28,11 +28,37 @@
     #imeWarning { display: none; color: #e11d48; background: #fff1f2; padding: 10px; border-radius: 8px; border: 1px solid #fda4af; font-weight: bold; margin-bottom: 10px; text-align: center; }
     .note { font-size: 0.85em; color: #94a3b8; margin-top: -10px; margin-bottom: 10px; }
     .word-badge { background: #334155; color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.9em; display: inline-block; }
+    
+    .btn-backup { background: #f8fafc; color: #475569; border: 1px solid #cbd5e1; width: auto; padding: 8px 16px; font-size: 0.9em; margin-right: 5px; margin-bottom: 5px; }
+    .btn-backup:hover:not(:disabled) { background: #f1f5f9; border-color: #94a3b8; }
+    .btn-danger { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; width: auto; padding: 8px 16px; font-size: 0.9em; }
+    .btn-danger:hover:not(:disabled) { background: #fecaca; }
+    .backup-panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-top: 15px; display: none; }
   </style>
 </head>
 <body>
 
   <h2>デジタル・ライティング・ポートフォリオ</h2>
+
+  <div class="card" style="margin-bottom: 15px;">
+    <div class="section-title">データ管理・引き継ぎ</div>
+    <p class="note">※入力内容は同じ端末なら自動で保存・復元されます。</p>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+      <button id="toggleBackupBtn" class="btn btn-backup" type="button">☁️ クラウド一時保存（別端末用）</button>
+      <button id="resetInputBtn" class="btn btn-danger" type="button">🗑 入力をすべてリセット</button>
+    </div>
+    
+    <div id="backupPanel" class="backup-panel">
+      <label>別端末引き継ぎ用データ (1枠のみ / 最大2週間保持)</label>
+      <div style="font-size: 0.9em; margin-bottom: 10px; color: #64748b;" id="backupStatusText">クラウドデータを確認中...</div>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <button id="cloudSaveBtn" class="btn btn-primary" style="width:auto; padding:8px 16px; font-size:0.9em;" type="button">保存する</button>
+        <button id="cloudLoadBtn" class="btn btn-backup" style="border-color:#2563eb; color:#2563eb;" type="button" disabled>読み込む</button>
+        <button id="cloudDeleteBtn" class="btn btn-danger" type="button" disabled>削除</button>
+      </div>
+      <p class="note" style="margin-top: 10px;">※保存・読込には Step1の「4桁ID」が必要です。</p>
+    </div>
+  </div>
 
   <div class="card">
     <div class="section-title">Step 1: 原文の作成</div>
@@ -86,6 +112,8 @@
     let selectedProblemMeta = null;
     let gemUrl = "";
     let compressedImageB64 = null;
+    const STORAGE_KEY = 'dwp_draft_data';
+    let isRestoring = false;
 
     function $(id) { return document.getElementById(id); }
 
@@ -129,10 +157,23 @@
       applyStrictInput($('message'));
       $('id4').addEventListener('input', (e) => e.target.value = e.target.value.replace(/\D/g, ''));
       
+      // 自動保存イベントの登録
+      ['id4', 'name', 'message', 'feedback', 'reflection', 'gradeSelect', 'problemSelect'].forEach(id => {
+        $(id).addEventListener('input', () => { if(!isRestoring) saveToLocal(); });
+        $(id).addEventListener('change', () => { if(!isRestoring) saveToLocal(); });
+      });
+
       google.script.run.withSuccessHandler(data => {
         gemUrl = data.gemUrl;
         if(gemUrl) $('gemBtn').disabled = false;
         populateGrades(data.grades);
+        
+        // データの復元処理
+        const savedData = loadFromLocal();
+        if (savedData && savedData.gradeSelect) {
+          applySavedDataToSelects(savedData);
+        }
+        updateWordCount();
       }).getInitialData();
 
       $('gradeSelect').onchange = () => {
@@ -160,7 +201,150 @@
         alert('原文をコピーしました。AIに貼り付けてください。');
         window.open(gemUrl, '_blank');
       };
+      
+      setupBackupAndResetUI();
     };
+
+    function saveToLocal() {
+      const data = {
+        id4: $('id4').value, name: $('name').value, message: $('message').value,
+        feedback: $('feedback').value, reflection: $('reflection').value,
+        gradeSelect: $('gradeSelect').value, problemSelect: $('problemSelect').value
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    function loadFromLocal() {
+      const jsonStr = localStorage.getItem(STORAGE_KEY);
+      if (!jsonStr) return false;
+      try {
+        const data = JSON.parse(jsonStr);
+        $('id4').value = data.id4 || '';
+        $('name').value = data.name || '';
+        $('message').value = data.message || '';
+        $('feedback').value = data.feedback || '';
+        $('reflection').value = data.reflection || '';
+        return data;
+      } catch(e) { return false; }
+    }
+
+    function applySavedDataToSelects(savedData) {
+      if (!savedData || !savedData.gradeSelect) return;
+      isRestoring = true;
+      $('gradeSelect').value = savedData.gradeSelect;
+      $('problemSelect').innerHTML = '<option>読み込み中...</option>';
+      google.script.run.withSuccessHandler(arr => {
+        $('problemSelect').innerHTML = '<option value="">問題を選択</option>';
+        arr.forEach(p => $('problemSelect').appendChild(new Option(p.label, p.rowIndex)));
+        $('problemSelect').disabled = false;
+        
+        if (savedData.problemSelect) {
+          $('problemSelect').value = savedData.problemSelect;
+          google.script.run.withSuccessHandler(meta => {
+            selectedProblemMeta = meta;
+            $('problemBody').textContent = meta.body;
+            isRestoring = false;
+          }).getProblem(savedData.gradeSelect, savedData.problemSelect);
+        } else {
+          isRestoring = false;
+        }
+      }).listProblems(savedData.gradeSelect, false);
+    }
+
+    function setupBackupAndResetUI() {
+      $('toggleBackupBtn').onclick = () => {
+        const p = $('backupPanel');
+        p.style.display = p.style.display === 'block' ? 'none' : 'block';
+        if (p.style.display === 'block') checkCloudBackup();
+      };
+
+      $('resetInputBtn').onclick = () => {
+        if(!confirm("本当に入力内容をすべて消去しますか？\n（※クラウドに保存していないデータは二度と戻りません）")) return;
+        ['id4', 'name', 'message', 'feedback', 'reflection', 'gradeSelect', 'problemSelect'].forEach(id => { $(id).value = ''; });
+        $('problemBody').textContent = '（問題文が表示されます）';
+        $('problemSelect').innerHTML = '<option value="">問題を選択</option>';
+        $('problemSelect').disabled = true;
+        updateWordCount();
+        localStorage.removeItem(STORAGE_KEY);
+        alert('入力をリセットしました。');
+      };
+
+      function checkCloudBackup() {
+        const id4 = $('id4').value;
+        if (!id4) {
+          $('backupStatusText').textContent = '※保存状況を確認するには、Step1 で「4桁ID」を入力してください。';
+          $('cloudLoadBtn').disabled = true;
+          $('cloudDeleteBtn').disabled = true;
+          return;
+        }
+        $('backupStatusText').textContent = 'クラウドデータを確認中...';
+        $('cloudLoadBtn').disabled = true;
+        $('cloudDeleteBtn').disabled = true;
+        google.script.run.withSuccessHandler(data => {
+          if (data) {
+            $('backupStatusText').innerHTML = `<b>保存済みデータあり</b> (最終保存: ${data.savedAtJST})`;
+            $('cloudLoadBtn').disabled = false;
+            $('cloudDeleteBtn').disabled = false;
+          } else {
+            $('backupStatusText').textContent = '保存されているデータはありません。';
+          }
+        }).loadBackupFromCloud(id4);
+      }
+
+      $('cloudSaveBtn').onclick = () => {
+        const id4 = $('id4').value;
+        if (!id4) return alert('Step1 で4桁IDを入力してください。');
+        const payload = {
+          id4, name: $('name').value, message: $('message').value,
+          feedback: $('feedback').value, reflection: $('reflection').value,
+          gradeSelect: $('gradeSelect').value, problemSelect: $('problemSelect').value
+        };
+        $('cloudSaveBtn').disabled = true;
+        $('cloudSaveBtn').textContent = '保存中...';
+        google.script.run.withSuccessHandler(res => {
+          $('cloudSaveBtn').disabled = false;
+          $('cloudSaveBtn').textContent = '保存する';
+          checkCloudBackup();
+          alert('クラウドへ一時保存しました。');
+        }).withFailureHandler(err => {
+          $('cloudSaveBtn').disabled = false;
+          $('cloudSaveBtn').textContent = '保存する';
+          alert('保存エラー: ' + err.message);
+        }).saveBackupToCloud(payload);
+      };
+
+      $('cloudLoadBtn').onclick = () => {
+        const id4 = $('id4').value;
+        if (!id4) return;
+        if (!confirm('現在入力されている内容は上書きされます。よろしいですか？')) return;
+        $('cloudLoadBtn').disabled = true;
+        google.script.run.withSuccessHandler(data => {
+          $('cloudLoadBtn').disabled = false;
+          if (!data) return alert('データが見つかりませんでした。');
+          
+          $('id4').value = data.id4 || '';
+          $('name').value = data.name || '';
+          $('message').value = data.message || '';
+          $('feedback').value = data.feedback || '';
+          $('reflection').value = data.reflection || '';
+          applySavedDataToSelects(data);
+          updateWordCount();
+          saveToLocal();
+          alert('クラウドから読み込みました。');
+        }).loadBackupFromCloud(id4);
+      };
+
+      $('cloudDeleteBtn').onclick = () => {
+        const id4 = $('id4').value;
+        if (!id4) return;
+        if (!confirm('クラウドのデータを完全に削除しますか？')) return;
+        $('cloudDeleteBtn').disabled = true;
+        google.script.run.withSuccessHandler(res => {
+          checkCloudBackup();
+          alert('削除しました。');
+        }).deleteBackupFromCloud(id4);
+      };
+    }
 
     function populateGrades(arr) {
       const sel = $('gradeSelect');
@@ -197,6 +381,7 @@
           $('statusMsg').style.color = '#059669';
           $('downloadBtn').href = res.fileUrl;
           $('downloadBtn').style.display = 'inline-flex';
+          localStorage.removeItem(STORAGE_KEY); // 提出成功時にローカル保存データをクリア
         })
         .withFailureHandler(err => {
           alert('エラー: ' + err);

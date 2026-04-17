@@ -139,6 +139,75 @@ function getProblem(spreadsheetId, rowIndex) {
 
 function refreshGradesCache() { return listGradeSheetsInAssignments(true); }
 
+/*** === バックアップ（一時保存）機能 === ***/
+
+function saveBackupToCloud(payload) {
+  const id4 = _s(payload.id4);
+  if (!id4) throw new Error('4桁IDが入力されていません。');
+  
+  const props = PropertiesService.getScriptProperties();
+  const now = new Date();
+  
+  // 1. 古いデータの削除（2週間以上前のデータを消去して容量確保 = ガベージコレクション）
+  const allProps = props.getProperties();
+  const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+  for (const key in allProps) {
+    if (key.startsWith('DWP_BACKUP_')) {
+      try {
+        const data = JSON.parse(allProps[key]);
+        if (new Date(data.savedAt) < twoWeeksAgo) {
+          props.deleteProperty(key);
+        }
+      } catch(e) {
+        // 破損データは念のため削除
+        props.deleteProperty(key);
+      }
+    }
+  }
+
+  // 2. 保存処理
+  const keyToSave = 'DWP_BACKUP_' + id4;
+  const dataToSave = {
+    id4: payload.id4,
+    name: payload.name,
+    message: payload.message,
+    feedback: payload.feedback,
+    reflection: payload.reflection,
+    gradeSelect: payload.gradeSelect,
+    problemSelect: payload.problemSelect,
+    savedAt: now.toISOString(),
+    savedAtJST: formatTimestampJST_(now)
+  };
+  
+  const jsonStr = JSON.stringify(dataToSave);
+  const byteSize = Utilities.newBlob(jsonStr).getBytes().length;
+  // PropertiesService は 1プロパティあたり 9KB (9216 bytes) 制限
+  if (byteSize > 9000) {
+    throw new Error('データ容量が大きすぎます(最大約3000文字)。少し文章を削ってから再度保存してください。');
+  }
+  
+  props.setProperty(keyToSave, jsonStr);
+  return { ok: true, savedAt: dataToSave.savedAtJST };
+}
+
+function loadBackupFromCloud(id4) {
+  if (!id4) throw new Error('4桁IDが入力されていません。');
+  const props = PropertiesService.getScriptProperties();
+  const jsonStr = props.getProperty('DWP_BACKUP_' + id4);
+  if (!jsonStr) return null;
+  try {
+    return JSON.parse(jsonStr);
+  } catch(e) {
+    return null;
+  }
+}
+
+function deleteBackupFromCloud(id4) {
+  if (!id4) throw new Error('4桁IDが入力されていません。');
+  PropertiesService.getScriptProperties().deleteProperty('DWP_BACKUP_' + id4);
+  return { ok: true };
+}
+
 /*** === 受付：PDF生成 ＆ 保存 === ***/
 function enqueueEssay(payload) {
   const id4 = _s(payload.id4);
