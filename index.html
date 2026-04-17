@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>デジタル・ライティング・ポートフォリオ</title>
+  <style>
+    :root { --primary: #1e293b; --accent: #2563eb; --bg: #f8fafc; }
+    body { font-family: system-ui,-apple-system,sans-serif; padding: 15px; background: var(--bg); color: #334155; max-width: 900px; margin: 0 auto; line-height: 1.5; }
+    h2 { text-align: center; color: var(--primary); margin-bottom: 20px; }
+    
+    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .section-title { font-weight: bold; font-size: 1.1em; border-left: 4px solid var(--accent); padding-left: 10px; margin-bottom: 15px; color: var(--primary); }
+    
+    label { font-weight: 600; font-size: 0.9em; display: block; margin-bottom: 5px; color: #64748b; }
+    select, input[type="text"], textarea { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 16px; margin-bottom: 15px; }
+    
+    textarea#message { font-family: "Georgia", serif; line-height: 1.8; background: #fff; }
+    .viewbox { background: #f1f5f9; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 0.95em; white-space: pre-wrap; margin-bottom: 15px; }
+    
+    .btn { display: inline-flex; align-items: center; justify-content: center; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; border: none; transition: 0.2s; text-decoration: none; }
+    .btn-primary { background: var(--accent); color: white; width: 100%; font-size: 1.1em; }
+    .btn-gem { background: linear-gradient(135deg, #4f46e5, #9333ea); color: white; width: 100%; margin: 10px 0; }
+    .btn-download { background: #10b981; color: white; margin-top: 15px; display: none; }
+    .btn:disabled { background: #cbd5e1; cursor: not-allowed; }
+    
+    #imeWarning { display: none; color: #e11d48; background: #fff1f2; padding: 10px; border-radius: 8px; border: 1px solid #fda4af; font-weight: bold; margin-bottom: 10px; text-align: center; }
+    .note { font-size: 0.85em; color: #94a3b8; margin-top: -10px; margin-bottom: 10px; }
+    .word-badge { background: #334155; color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.9em; display: inline-block; }
+  </style>
+</head>
+<body>
+
+  <h2>デジタル・ライティング・ポートフォリオ</h2>
+
+  <div class="card">
+    <div class="section-title">Step 1: 原文の作成</div>
+    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+      <select id="gradeSelect" style="margin-bottom:0;"><option value="">学年・科目を選択</option></select>
+      <button onclick="refreshGrades()" id="refBtn" class="btn" style="background:#e2e8f0; padding:0 15px;">更新</button>
+    </div>
+    <select id="problemSelect" disabled><option value="">問題を選択</option></select>
+    <div id="problemBody" class="viewbox">（問題文が表示されます）</div>
+
+    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 10px;">
+      <div><label>4桁ID</label><input type="text" id="id4" maxlength="4" placeholder="1234"></div>
+      <div><label>氏名 (English)</label><input type="text" id="name" placeholder="Taro Yamada"></div>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <label>Draft (原文)</label>
+      <div id="wordCount" class="word-badge">0 words</div>
+    </div>
+    <div id="imeWarning">日本語入力は禁止です。IMEをオフにしてください。</div>
+    <textarea id="message" rows="8" placeholder="Type your English draft here..."></textarea>
+    <div class="note">※コピペ・予測変換は使えません。</div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Step 2: AI添削と振り返り</div>
+    <button id="gemBtn" class="btn btn-gem" type="button" disabled>📝 原文をコピーして AI(Gem) を開く</button>
+    
+    <label>AIからのアドバイス (貼り付け)</label>
+    <textarea id="feedback" rows="5" placeholder="AIの回答をここにペースト"></textarea>
+
+    <label>振り返り (日本語可)</label>
+    <textarea id="reflection" rows="4" placeholder="学んだこと、次回の目標など"></textarea>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Step 3: 写真添付と提出</div>
+    <label>手書きメモ等の写真（任意）</label>
+    <input type="file" id="photoInput" accept="image/*" capture="environment">
+    <canvas id="photoCanvas" style="display:none;"></canvas>
+
+    <div style="margin-top:20px; text-align:center;">
+      <button id="submitBtn" class="btn btn-primary" onclick="submitPortfolio()">ポートフォリオを提出して完了</button>
+      <a id="downloadBtn" class="btn btn-download" target="_blank">📥 今すぐPDFを確認・保存する</a>
+      <div id="statusMsg" style="margin-top:10px; font-weight:bold;"></div>
+    </div>
+  </div>
+
+  <script>
+    let selectedGradeId = "";
+    let selectedProblemMeta = null;
+    let gemUrl = "";
+    let compressedImageB64 = null;
+
+    function $(id) { return document.getElementById(id); }
+
+    // 入力ガード（原文のみ）
+    function applyStrictInput(el) {
+      el.addEventListener('paste', e => { e.preventDefault(); alert('原文のペーストはできません。'); });
+      el.addEventListener('compositionstart', e => { e.preventDefault(); el.blur(); $('imeWarning').style.display='block'; setTimeout(()=>el.focus(), 50); });
+      el.addEventListener('input', () => {
+        el.value = el.value.replace(/[^\x00-\x7F]/g, '');
+        updateWordCount();
+      });
+    }
+
+    function updateWordCount() {
+      const m = ($('message').value || '').match(/[A-Za-z]+(?:[-'][A-Za-z]+)*/g);
+      $('wordCount').textContent = `${m ? m.length : 0} words`;
+    }
+
+    // 画像圧縮
+    $('photoInput').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(ev) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = $('photoCanvas');
+          let w = img.width, h = img.height;
+          if (w > 1200) { h *= 1200 / w; w = 1200; }
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          compressedImageB64 = canvas.toDataURL('image/jpeg', 0.7);
+        }
+        img.src = ev.target.result;
+      }
+      reader.readAsDataURL(file);
+    });
+
+    // 初期化
+    window.onload = () => {
+      applyStrictInput($('message'));
+      $('id4').addEventListener('input', (e) => e.target.value = e.target.value.replace(/\D/g, ''));
+      
+      google.script.run.withSuccessHandler(data => {
+        gemUrl = data.gemUrl;
+        if(gemUrl) $('gemBtn').disabled = false;
+        populateGrades(data.grades);
+      }).getInitialData();
+
+      $('gradeSelect').onchange = () => {
+        const gid = $('gradeSelect').value;
+        if(!gid) return;
+        $('problemSelect').innerHTML = '<option>読み込み中...</option>';
+        google.script.run.withSuccessHandler(arr => {
+          $('problemSelect').innerHTML = '<option value="">問題を選択</option>';
+          arr.forEach(p => $('problemSelect').appendChild(new Option(p.label, p.rowIndex)));
+          $('problemSelect').disabled = false;
+        }).listProblems(gid, false);
+      };
+
+      $('problemSelect').onchange = () => {
+        google.script.run.withSuccessHandler(meta => {
+          selectedProblemMeta = meta;
+          $('problemBody').textContent = meta.body;
+        }).getProblem($('gradeSelect').value, $('problemSelect').value);
+      };
+
+      $('gemBtn').onclick = async () => {
+        const txt = $('message').value;
+        if(txt.length < 5) return alert('まずは英文を書きましょう。');
+        await navigator.clipboard.writeText(txt);
+        alert('原文をコピーしました。AIに貼り付けてください。');
+        window.open(gemUrl, '_blank');
+      };
+    };
+
+    function populateGrades(arr) {
+      const sel = $('gradeSelect');
+      sel.innerHTML = '<option value="">学年・科目を選択</option>';
+      arr.forEach(g => sel.appendChild(new Option(g.name, g.id)));
+    }
+
+    function refreshGrades() {
+      $('refBtn').textContent = '...';
+      google.script.run.withSuccessHandler(arr => {
+        populateGrades(arr);
+        $('refBtn').textContent = '更新';
+      }).refreshGradesCache();
+    }
+
+    function submitPortfolio() {
+      const payload = {
+        id4: $('id4').value, name: $('name').value, message: $('message').value,
+        feedback: $('feedback').value, reflection: $('reflection').value,
+        spreadsheetId: $('gradeSelect').value, serial: selectedProblemMeta?.serial,
+        title: selectedProblemMeta?.title, imageB64: compressedImageB64
+      };
+
+      if(!payload.id4 || !payload.name || !payload.message || !payload.spreadsheetId) {
+        alert('必須項目（ID、氏名、学年、原文）を入力してください。'); return;
+      }
+
+      $('submitBtn').disabled = true;
+      $('statusMsg').textContent = 'PDFを作成して保存中... (30秒ほどかかります)';
+
+      google.script.run
+        .withSuccessHandler(res => {
+          $('statusMsg').textContent = '提出完了しました！';
+          $('statusMsg').style.color = '#059669';
+          $('downloadBtn').href = res.fileUrl;
+          $('downloadBtn').style.display = 'inline-flex';
+        })
+        .withFailureHandler(err => {
+          alert('エラー: ' + err);
+          $('submitBtn').disabled = false;
+        })
+        .enqueueEssay(payload);
+    }
+  </script>
+</body>
+</html>
