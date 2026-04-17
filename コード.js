@@ -255,10 +255,6 @@ function enqueueEssay(payload) {
   body.appendParagraph("２．【振り返り (Reflection)】").setHeading(DocumentApp.ParagraphHeading.HEADING2).setFontSize(18);
   body.appendParagraph((reflection || "（入力なし）") + "\n").setFontSize(14);
 
-  // 3. AIフィードバック
-  body.appendParagraph("３．【AI フィードバック (AI Feedback)】").setHeading(DocumentApp.ParagraphHeading.HEADING2).setFontSize(18);
-  body.appendParagraph((feedback || "（入力なし）") + "\n").setFontSize(13);
-
   // 画像
   if (imageB64) {
     try {
@@ -266,14 +262,17 @@ function enqueueEssay(payload) {
       const b64Data = imageB64.split(',')[1];
       const imgBlob = Utilities.newBlob(Utilities.base64Decode(b64Data), "image/jpeg", "handwriting");
       const img = body.appendImage(imgBlob);
-      // 画像サイズ調整（幅一杯まで）
-      const maxWidth = 450; 
-      if (img.getWidth() > maxWidth) {
-        const ratio = maxWidth / img.getWidth();
-        img.setWidth(maxWidth).setHeight(img.getHeight() * ratio);
-      }
+      
+      // 画像サイズ調整（余白ギリギリいっぱいまで横幅を合わせる）
+      const availableWidth = body.getPageWidth() - body.getMarginLeft() - body.getMarginRight();
+      const ratio = availableWidth / img.getWidth();
+      img.setWidth(availableWidth).setHeight(img.getHeight() * ratio);
     } catch(e) {}
   }
+
+  // 3. AIフィードバック
+  body.appendParagraph("３．【AI フィードバック (AI Feedback)】").setHeading(DocumentApp.ParagraphHeading.HEADING2).setFontSize(18);
+  body.appendParagraph((feedback || "（入力なし）") + "\n").setFontSize(13);
 
   doc.saveAndClose();
   const pdfBlob = doc.getAs('application/pdf').setName(fnameBase + ".pdf");
