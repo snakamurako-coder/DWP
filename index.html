@@ -41,10 +41,49 @@
     .btn-danger:hover:not(:disabled) { background: #fecaca; }
     .backup-panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-top: 15px; display: none; }
     
-    .btn-tool { background: #fff; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px 10px; font-weight: bold; cursor: pointer; }
+    .btn-tool { background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 20px; font-size: 1.3em; font-weight: bold; cursor: pointer; margin: 2px; transition: 0.2s; }
     .btn-tool:hover { background: #e2e8f0; }
     .word { cursor: pointer; display: inline-block; border-radius: 2px; }
     .word.selected { outline: 2px solid var(--accent); background-color: #dbeafe !important; }
+    
+    .switch-container {
+      display: inline-flex;
+      align-items: center;
+      background: #e2e8f0;
+      border-radius: 20px;
+      width: 240px;
+      height: 40px;
+      position: relative;
+      cursor: pointer;
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .switch-slider {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 116px;
+      height: 36px;
+      background: white;
+      border-radius: 18px;
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .switch-option {
+      flex: 1;
+      text-align: center;
+      font-size: 0.9em;
+      font-weight: bold;
+      z-index: 1;
+      user-select: none;
+      color: #64748b;
+      transition: color 0.3s;
+    }
+    .switch-option.active {
+      color: var(--primary);
+    }
+    .switch-container[data-state="2"] .switch-slider {
+      transform: translateX(120px);
+    }
   </style>
 </head>
 <body>
@@ -139,18 +178,32 @@
       <button id="clearHighlightBtn" class="btn btn-backup" type="button">🗑 全消去</button>
     </div>
     
-    <div id="styleToolbar" style="display:none; gap:5px; margin-bottom:10px; padding:10px; background:#f1f5f9; border-radius:8px; align-items:center; flex-wrap:wrap;">
-      <span style="font-size:0.9em; font-weight:bold; margin-right:10px;">選択範囲を装飾:</span>
-      <button type="button" class="btn-tool" style="color:red;" onclick="applyStyle('color', 'red')">A</button>
-      <button type="button" class="btn-tool" style="color:blue;" onclick="applyStyle('color', 'blue')">A</button>
-      <button type="button" class="btn-tool" style="color:green;" onclick="applyStyle('color', 'green')">A</button>
-      <button type="button" class="btn-tool" style="background:yellow;" onclick="applyStyle('bg', 'yellow')">■</button>
-      <button type="button" class="btn-tool" style="background:lightgreen;" onclick="applyStyle('bg', 'lightgreen')">■</button>
-      <button type="button" class="btn-tool" style="background:#fbcfe8;" onclick="applyStyle('bg', '#fbcfe8')">■</button>
-      <button type="button" class="btn-tool" style="font-weight:bold;" onclick="applyStyle('bold')">B</button>
-      <button type="button" class="btn-tool" style="font-style:italic;" onclick="applyStyle('italic')">I</button>
-      <button type="button" class="btn-tool" style="text-decoration:underline;" onclick="applyStyle('underline')">U</button>
-      <button type="button" class="btn-tool" onclick="applyStyle('clear')">リセット</button>
+    <div id="styleToolbar" style="display:none; flex-direction: column; align-items: flex-start; gap:10px; margin-bottom:10px; padding:15px; background:#f1f5f9; border-radius:8px;">
+      <div style="display:flex; align-items:center; flex-wrap:wrap; gap: 10px; width: 100%;">
+        <span style="font-size:1em; font-weight:bold;">適用モード:</span>
+        <div class="switch-container" id="selectionModeSwitch" data-state="1">
+          <div class="switch-slider"></div>
+          <div class="switch-option active" id="opt1">①選択各語</div>
+          <div class="switch-option" id="opt2">②終始選択</div>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; flex-wrap:wrap; gap:5px;">
+        <span style="font-size:1em; font-weight:bold; margin-right:10px;">装飾:</span>
+        <button type="button" class="btn-tool" style="color:red;" onclick="applyStyle('color', 'red')">A</button>
+        <button type="button" class="btn-tool" style="color:blue;" onclick="applyStyle('color', 'blue')">A</button>
+        <button type="button" class="btn-tool" style="color:green;" onclick="applyStyle('color', 'green')">A</button>
+        <button type="button" class="btn-tool" style="color:#d97706;" onclick="applyStyle('color', '#d97706')">A</button>
+        <button type="button" class="btn-tool" style="color:purple;" onclick="applyStyle('color', 'purple')">A</button>
+        <button type="button" class="btn-tool" style="color:gray;" onclick="applyStyle('color', 'gray')">A</button>
+        <button type="button" class="btn-tool" style="color:black;" onclick="applyStyle('color', '')">A(黒)</button>
+        <button type="button" class="btn-tool" style="background:yellow;" onclick="applyStyle('bg', 'yellow')">■</button>
+        <button type="button" class="btn-tool" style="background:lightgreen;" onclick="applyStyle('bg', 'lightgreen')">■</button>
+        <button type="button" class="btn-tool" style="background:#fbcfe8;" onclick="applyStyle('bg', '#fbcfe8')">■</button>
+        <button type="button" class="btn-tool" style="font-weight:bold;" onclick="applyStyle('bold')">B</button>
+        <button type="button" class="btn-tool" style="font-style:italic;" onclick="applyStyle('italic')">I</button>
+        <button type="button" class="btn-tool" style="text-decoration:underline;" onclick="applyStyle('underline')">U</button>
+        <button type="button" class="btn-tool" onclick="applyStyle('clear')">リセット</button>
+      </div>
     </div>
 
     <div id="highlightedArea" class="viewbox eng-text-area" style="min-height: 100px;">（添削後文を入力して「変更点をハイライト」を押すと、ここに表示されます。単語をタップして色やスタイルを変更できます。）</div>
@@ -226,7 +279,23 @@
     // 初期化
     window.onload = () => {
       loadSettings();
+      loadSelectionMode();
       applyStrictInput($('message'));
+      
+      const sw = $('selectionModeSwitch');
+      if(sw) {
+        let startX = 0;
+        sw.addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, {passive: true});
+        sw.addEventListener('touchend', e => {
+          const endX = e.changedTouches[0].clientX;
+          const diff = endX - startX;
+          if (diff > 30) setSelectionMode('2');
+          else if (diff < -30) setSelectionMode('1');
+          else toggleSelectionMode();
+          e.preventDefault();
+        });
+        sw.addEventListener('click', toggleSelectionMode);
+      }
       $('id4').addEventListener('input', (e) => e.target.value = e.target.value.replace(/\D/g, ''));
       
       $('downloadBtn').addEventListener('click', () => {
@@ -690,31 +759,69 @@
       }
     }
 
+    function loadSelectionMode() {
+      const mode = localStorage.getItem('dwp_selection_mode') || '1';
+      setSelectionMode(mode);
+    }
+
+    function toggleSelectionMode() {
+      const container = $('selectionModeSwitch');
+      if (!container) return;
+      const newState = container.getAttribute('data-state') === '1' ? '2' : '1';
+      setSelectionMode(newState);
+    }
+
+    function setSelectionMode(mode) {
+      const container = $('selectionModeSwitch');
+      if (!container) return;
+      container.setAttribute('data-state', mode);
+      $('opt1').classList.toggle('active', mode === '1');
+      $('opt2').classList.toggle('active', mode === '2');
+      localStorage.setItem('dwp_selection_mode', mode);
+    }
+
     function applyStyle(type, val) {
+      const mode = $('selectionModeSwitch') ? $('selectionModeSwitch').getAttribute('data-state') : '1';
       const words = Array.from($('highlightedArea').children);
-      let firstSelected = -1, lastSelected = -1;
-      words.forEach((w, i) => {
-        if (w.classList.contains('selected')) {
-          if (firstSelected === -1) firstSelected = i;
-          lastSelected = i;
-        }
-      });
       
-      if (firstSelected === -1) return;
-      
-      for (let i = firstSelected; i <= lastSelected; i++) {
-        const w = words[i];
-        if (type === 'color') w.style.color = val;
-        if (type === 'bg') w.style.backgroundColor = val;
-        if (type === 'bold') w.style.fontWeight = w.style.fontWeight === 'bold' ? 'normal' : 'bold';
-        if (type === 'italic') w.style.fontStyle = w.style.fontStyle === 'italic' ? 'normal' : 'italic';
-        if (type === 'underline') w.style.textDecoration = w.style.textDecoration === 'underline' ? 'none' : 'underline';
-        if (type === 'clear') {
-           w.style.color = ''; w.style.backgroundColor = ''; w.style.fontWeight = ''; w.style.fontStyle = ''; w.style.textDecoration = '';
+      if (mode === '2') {
+        let firstSelected = -1, lastSelected = -1;
+        words.forEach((w, i) => {
+          if (w.classList.contains('selected')) {
+            if (firstSelected === -1) firstSelected = i;
+            lastSelected = i;
+          }
+        });
+        
+        if (firstSelected === -1) return;
+        
+        for (let i = firstSelected; i <= lastSelected; i++) {
+          applyStyleToWord(words[i], type, val);
         }
-        w.classList.remove('selected');
+      } else {
+        let selectedFound = false;
+        words.forEach(w => {
+          if (w.classList.contains('selected')) {
+            selectedFound = true;
+            applyStyleToWord(w, type, val);
+          }
+        });
+        if (!selectedFound) return;
       }
+      
+      words.forEach(w => w.classList.remove('selected'));
       saveToLocal();
+    }
+
+    function applyStyleToWord(w, type, val) {
+      if (type === 'color') w.style.color = val;
+      if (type === 'bg') w.style.backgroundColor = val;
+      if (type === 'bold') w.style.fontWeight = w.style.fontWeight === 'bold' ? 'normal' : 'bold';
+      if (type === 'italic') w.style.fontStyle = w.style.fontStyle === 'italic' ? 'normal' : 'italic';
+      if (type === 'underline') w.style.textDecoration = w.style.textDecoration === 'underline' ? 'none' : 'underline';
+      if (type === 'clear') {
+         w.style.color = ''; w.style.backgroundColor = ''; w.style.fontWeight = ''; w.style.fontStyle = ''; w.style.textDecoration = '';
+      }
     }
 
     function getHighlightData() {
