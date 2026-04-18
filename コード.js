@@ -75,6 +75,22 @@ function _getCachedProblems_(spreadsheetId) {
 }
 
 function getInitialData() {
+  ensureAppStructure_();
+
+  // バッチ処理のトリガー確認
+  const props = PropertiesService.getScriptProperties();
+  const lastBatchTimeStr = props.getProperty('LAST_BATCH_PROCESS_TIME');
+  const now = new Date().getTime();
+  const lastTime = lastBatchTimeStr ? parseInt(lastBatchTimeStr, 10) : 0;
+  
+  if (now - lastTime > 10 * 60 * 1000) { // 10分以上
+    try {
+      processBatchSubmissions();
+    } catch(e) {
+      console.error('Initial batch process failed:', e);
+    }
+  }
+
   return {
     grades: listGradeSheetsInAssignments(false),
     gemUrl: PropertiesService.getScriptProperties().getProperty('GEM_URL') || ''
@@ -87,15 +103,13 @@ function listGradeSheetsInAssignments(force) {
     if (cached.length) return cached;
   }
   const parentId = getParentFolderId_();
-  const assignmentsFolderId = getSubfolderId_(parentId, 'Assignments', {createIfMissing:false});
+  const assignmentsFolderId = getSubfolderId_(parentId, 'Assignments', {createIfMissing:true});
   const folder = DriveApp.getFolderById(assignmentsFolderId);
-  const it = folder.getFiles();
+  const it = folder.getFilesByType(MimeType.GOOGLE_SHEETS);
   const result = [];
   while (it.hasNext()) {
     const f = it.next();
-    if (f.getMimeType() === MimeType.GOOGLE_SHEETS) {
-      result.push({ id: f.getId(), name: f.getName() });
-    }
+    result.push({ id: f.getId(), name: f.getName() });
   }
   result.sort((a,b)=>a.name.localeCompare(b.name,'ja'));
   _setCachedGrades_(result);
@@ -139,6 +153,143 @@ function getProblem(spreadsheetId, rowIndex) {
 
 function refreshGradesCache() { return listGradeSheetsInAssignments(true); }
 
+/*** === アプリ初期化とバッチ処理 === ***/
+
+function ensureAppStructure_() {
+  const parentId = getParentFolderId_();
+  const assignmentsFolderId = getSubfolderId_(parentId, 'Assignments', {createIfMissing:true});
+  getSubfolderId_(parentId, 'inbox_submissions', {createIfMissing:true});
+  getSubfolderId_(parentId, 'processed_submissions', {createIfMissing:true});
+  getSubfolderId_(parentId, 'Portfolios', {createIfMissing:true});
+  
+  const assignmentsFolder = DriveApp.getFolderById(assignmentsFolderId);
+  const files = assignmentsFolder.getFilesByType(MimeType.GOOGLE_SHEETS);
+  
+  if (!files.hasNext()) {
+    const ss = SpreadsheetApp.create('01_Sample Subject');
+    const ssFile = DriveApp.getFileById(ss.getId());
+    // Move to assignments folder
+    try {
+      ssFile.moveTo(assignmentsFolder);
+    } catch(e) {
+      assignmentsFolder.addFile(ssFile);
+      DriveApp.getRootFolder().removeFile(ssFile);
+    }
+    setupWorkbookSheets_(ss);
+  } else {
+    while (files.hasNext()) {
+      const ss = SpreadsheetApp.open(files.next());
+      setupWorkbookSheets_(ss);
+    }
+  }
+}
+
+function setupWorkbookSheets_(ss) {
+  let ash = ss.getSheetByName('Assignments');
+  if (!ash) {
+    ash = ss.insertSheet('Assignments');
+    ash.appendRow(['通し番号', '見出し', '問題文', '備考']);
+    ash.appendRow([1, 'Sample 1', 'Write a self-introduction.', '']);
+  }
+  let ssh = ss.getSheetByName('Submissions');
+  if (!ssh) {
+    ssh = ss.insertSheet('Submissions');
+    ssh.appendRow(['Timestamp', 'ID', 'Name', 'Subject', 'Serial', 'Title', 'Word Count', 'Original Draft', 'Corrected Text', 'Highlight Data', 'Reflection', 'AI Feedback']);
+    ssh.setFrozenRows(1);
+  }
+}
+
+function triggerBatchProcess() {
+  try {
+    return processBatchSubmissions();
+  } catch (e) {
+    return { ok: false, message: e.message };
+  }
+}
+
+function processBatchSubmissions() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) {
+    throw new Error('現在他の処理が実行中です。しばらくしてから再度お試しください。');
+  }
+
+  try {
+    const parentId = getParentFolderId_();
+    const inboxId = getSubfolderId_(parentId, 'inbox_submissions', {createIfMissing:true});
+    const processedId = getSubfolderId_(parentId, 'processed_submissions', {createIfMissing:true});
+    
+    const inboxFolder = DriveApp.getFolderById(inboxId);
+    const processedFolder = DriveApp.getFolderById(processedId);
+    const files = inboxFolder.getFilesByType(MimeType.JSON);
+    
+    if (!files.hasNext()) {
+      return { ok: true, message: '未処理の提出ファイルは存在しません。' };
+    }
+    
+    const recordsBySpreadsheet = {};
+    const processedFiles = [];
+    
+    while (files.hasNext()) {
+      const file = files.next();
+      const content = file.getBlob().getDataAsString();
+      try {
+        const record = JSON.parse(content);
+        if (record.spreadsheetId) {
+          if (!recordsBySpreadsheet[record.spreadsheetId]) {
+            recordsBySpreadsheet[record.spreadsheetId] = [];
+          }
+          recordsBySpreadsheet[record.spreadsheetId].push(record);
+        }
+        processedFiles.push(file);
+      } catch (e) {}
+    }
+    
+    for (const ssId in recordsBySpreadsheet) {
+      try {
+        const ss = SpreadsheetApp.openById(ssId);
+        setupWorkbookSheets_(ss);
+        const sh = ss.getSheetByName('Submissions');
+        
+        const rows = recordsBySpreadsheet[ssId].map(r => [
+          r.timestamp || '',
+          r.id4 || '',
+          r.name || '',
+          r.gradeSubject || '',
+          r.serial || '',
+          r.title || '',
+          r.wordCount || 0,
+          r.message || '',
+          r.correctedText || '',
+          r.highlightData ? JSON.stringify(r.highlightData) : '',
+          r.reflection || '',
+          r.feedback || ''
+        ]);
+        
+        if (rows.length > 0) {
+          sh.getRange(sh.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+        }
+      } catch (e) {
+        throw new Error(`スプレッドシートへの書き込みに失敗しました: ${e.message}`);
+      }
+    }
+    
+    processedFiles.forEach(file => {
+      try {
+        file.moveTo(processedFolder);
+      } catch(e) {
+        processedFolder.addFile(file);
+        inboxFolder.removeFile(file);
+      }
+    });
+    
+    PropertiesService.getScriptProperties().setProperty('LAST_BATCH_PROCESS_TIME', new Date().getTime().toString());
+    
+    return { ok: true, message: `${processedFiles.length} 件のファイルを一斉書き込みしました。` };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 /*** === バックアップ（一時保存）機能 === ***/
 
 function saveBackupToCloud(payload) {
@@ -171,6 +322,8 @@ function saveBackupToCloud(payload) {
     id4: payload.id4,
     name: payload.name,
     message: payload.message,
+    correctedText: payload.correctedText,
+    highlightData: payload.highlightData,
     feedback: payload.feedback,
     reflection: payload.reflection,
     gradeSelect: payload.gradeSelect,
@@ -213,6 +366,8 @@ function enqueueEssay(payload) {
   const id4 = _s(payload.id4);
   const name = _s(payload.name);
   const message = _s(payload.message);
+  const correctedText = _s(payload.correctedText);
+  const highlightData = payload.highlightData;
   const feedback = _s(payload.feedback);
   const reflection = _s(payload.reflection);
   const spreadsheetId = _s(payload.spreadsheetId);
@@ -229,7 +384,7 @@ function enqueueEssay(payload) {
   const parentId = getParentFolderId_();
 
   // 1. JSON保存
-  const record = { timestamp, gradeSubject, serial, title, id4, name, message, wordCount, feedback, reflection };
+  const record = { timestamp, spreadsheetId, gradeSubject, serial, title, id4, name, message, correctedText, highlightData, wordCount, feedback, reflection };
   const inboxId = getSubfolderId_(parentId, 'inbox_submissions', {createIfMissing:true});
   DriveApp.getFolderById(inboxId).createFile(Utilities.newBlob(JSON.stringify(record, null, 2), 'application/json', fnameBase + '.json'));
 
@@ -251,8 +406,29 @@ function enqueueEssay(payload) {
   body.appendParagraph("１．【原文 (Original Draft)】").setHeading(DocumentApp.ParagraphHeading.HEADING2).setFontSize(18);
   body.appendParagraph(message + "\n").setFontSize(14).setLineSpacing(1.5);
 
-  // 2. 振り返り
-  body.appendParagraph("２．【振り返り (Reflection)】").setHeading(DocumentApp.ParagraphHeading.HEADING2).setFontSize(18);
+  // 2. 添削後文
+  if (correctedText) {
+    body.appendParagraph("２．【添削後文 (Corrected Text)】").setHeading(DocumentApp.ParagraphHeading.HEADING2).setFontSize(18);
+    if (highlightData && highlightData.length > 0) {
+      const p = body.appendParagraph("");
+      p.setLineSpacing(1.5);
+      p.setFontSize(14);
+      highlightData.forEach(run => {
+        const textElem = p.appendText(run.text);
+        if (run.color) textElem.setForegroundColor(run.color);
+        if (run.bg) textElem.setBackgroundColor(run.bg);
+        if (run.bold) textElem.setBold(true);
+        if (run.italic) textElem.setItalic(true);
+        if (run.underline) textElem.setUnderline(true);
+      });
+      body.appendParagraph("\n");
+    } else {
+      body.appendParagraph(correctedText + "\n").setFontSize(14).setLineSpacing(1.5);
+    }
+  }
+
+  // 3. 振り返り
+  body.appendParagraph("３．【振り返り (Reflection)】").setHeading(DocumentApp.ParagraphHeading.HEADING2).setFontSize(18);
   body.appendParagraph((reflection || "（入力なし）") + "\n").setFontSize(14);
 
   // 画像
@@ -270,8 +446,8 @@ function enqueueEssay(payload) {
     } catch(e) {}
   }
 
-  // 3. AIフィードバック
-  body.appendParagraph("３．【AI フィードバック (AI Feedback)】").setHeading(DocumentApp.ParagraphHeading.HEADING2).setFontSize(18);
+  // 4. AIフィードバック
+  body.appendParagraph("４．【AI フィードバック (AI Feedback)】").setHeading(DocumentApp.ParagraphHeading.HEADING2).setFontSize(18);
   body.appendParagraph((feedback || "（入力なし）") + "\n").setFontSize(13);
 
   doc.saveAndClose();

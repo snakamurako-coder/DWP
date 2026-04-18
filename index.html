@@ -34,6 +34,11 @@
     .btn-danger { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; width: auto; padding: 8px 16px; font-size: 0.9em; }
     .btn-danger:hover:not(:disabled) { background: #fecaca; }
     .backup-panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-top: 15px; display: none; }
+    
+    .btn-tool { background: #fff; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px 10px; font-weight: bold; cursor: pointer; }
+    .btn-tool:hover { background: #e2e8f0; }
+    .word { cursor: pointer; display: inline-block; border-radius: 2px; }
+    .word.selected { outline: 2px solid var(--accent); background-color: #dbeafe !important; }
   </style>
 </head>
 <body>
@@ -90,6 +95,31 @@
     <label>AIからのアドバイス (貼り付け)</label>
     <textarea id="feedback" rows="5" placeholder="AIの回答をここにペースト"></textarea>
 
+    <label>添削後文 (Corrected Text)</label>
+    <textarea id="correctedText" rows="6" placeholder="AIの添削結果を元に、修正した英文をペースト"></textarea>
+
+    <label>添削後文ハイライト</label>
+    <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+      <button id="diffBtn" class="btn btn-backup" type="button">🔍 変更点をハイライト</button>
+      <button id="clearHighlightBtn" class="btn btn-backup" type="button">🗑 全消去</button>
+    </div>
+    
+    <div id="styleToolbar" style="display:none; gap:5px; margin-bottom:10px; padding:10px; background:#f1f5f9; border-radius:8px; align-items:center; flex-wrap:wrap;">
+      <span style="font-size:0.9em; font-weight:bold; margin-right:10px;">選択範囲を装飾:</span>
+      <button type="button" class="btn-tool" style="color:red;" onclick="applyStyle('color', 'red')">A</button>
+      <button type="button" class="btn-tool" style="color:blue;" onclick="applyStyle('color', 'blue')">A</button>
+      <button type="button" class="btn-tool" style="color:green;" onclick="applyStyle('color', 'green')">A</button>
+      <button type="button" class="btn-tool" style="background:yellow;" onclick="applyStyle('bg', 'yellow')">■</button>
+      <button type="button" class="btn-tool" style="background:lightgreen;" onclick="applyStyle('bg', 'lightgreen')">■</button>
+      <button type="button" class="btn-tool" style="background:#fbcfe8;" onclick="applyStyle('bg', '#fbcfe8')">■</button>
+      <button type="button" class="btn-tool" style="font-weight:bold;" onclick="applyStyle('bold')">B</button>
+      <button type="button" class="btn-tool" style="font-style:italic;" onclick="applyStyle('italic')">I</button>
+      <button type="button" class="btn-tool" style="text-decoration:underline;" onclick="applyStyle('underline')">U</button>
+      <button type="button" class="btn-tool" onclick="applyStyle('clear')">リセット</button>
+    </div>
+
+    <div id="highlightedArea" class="viewbox" style="min-height: 100px;">（添削後文を入力して「変更点をハイライト」を押すと、ここに表示されます。単語をタップして色やスタイルを変更できます。）</div>
+
     <label>振り返り (日本語可)</label>
     <textarea id="reflection" rows="4" placeholder="学んだこと、次回の目標など"></textarea>
   </div>
@@ -105,6 +135,12 @@
       <a id="downloadBtn" class="btn btn-download" target="_blank">📥 今すぐPDFを確認・保存する</a>
       <div id="statusMsg" style="margin-top:10px; font-weight:bold;"></div>
     </div>
+  </div>
+
+  <div class="card" style="border-color: #f59e0b; background: #fffbeb;">
+    <div class="section-title" style="border-left-color: #f59e0b; color: #b45309;">管理者用メニュー</div>
+    <p class="note" style="color: #92400e;">溜まった提出データ（JSON）を一斉にスプレッドシートへ書き込みます。</p>
+    <button id="batchWriteBtn" class="btn" style="background: #f59e0b; color: white; width: 100%;">一斉書込を実行</button>
   </div>
 
   <script>
@@ -158,7 +194,7 @@
       $('id4').addEventListener('input', (e) => e.target.value = e.target.value.replace(/\D/g, ''));
       
       // 自動保存イベントの登録
-      ['id4', 'name', 'message', 'feedback', 'reflection', 'gradeSelect', 'problemSelect'].forEach(id => {
+      ['id4', 'name', 'message', 'feedback', 'reflection', 'correctedText', 'gradeSelect', 'problemSelect'].forEach(id => {
         $(id).addEventListener('input', () => { if(!isRestoring) saveToLocal(); });
         $(id).addEventListener('change', () => { if(!isRestoring) saveToLocal(); });
       });
@@ -208,8 +244,9 @@
     function saveToLocal() {
       const data = {
         id4: $('id4').value, name: $('name').value, message: $('message').value,
-        feedback: $('feedback').value, reflection: $('reflection').value,
-        gradeSelect: $('gradeSelect').value, problemSelect: $('problemSelect').value
+        correctedText: $('correctedText').value, feedback: $('feedback').value, 
+        reflection: $('reflection').value, gradeSelect: $('gradeSelect').value, 
+        problemSelect: $('problemSelect').value, highlightData: getHighlightData()
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     }
@@ -222,8 +259,10 @@
         $('id4').value = data.id4 || '';
         $('name').value = data.name || '';
         $('message').value = data.message || '';
+        $('correctedText').value = data.correctedText || '';
         $('feedback').value = data.feedback || '';
         $('reflection').value = data.reflection || '';
+        if (data.highlightData) restoreHighlightData(data.highlightData);
         return data;
       } catch(e) { return false; }
     }
@@ -260,10 +299,12 @@
 
       $('resetInputBtn').onclick = () => {
         if(!confirm("本当に入力内容をすべて消去しますか？\n（※クラウドに保存していないデータは二度と戻りません）")) return;
-        ['id4', 'name', 'message', 'feedback', 'reflection', 'gradeSelect', 'problemSelect'].forEach(id => { $(id).value = ''; });
+        ['id4', 'name', 'message', 'correctedText', 'feedback', 'reflection', 'gradeSelect', 'problemSelect'].forEach(id => { $(id).value = ''; });
         $('problemBody').textContent = '（問題文が表示されます）';
         $('problemSelect').innerHTML = '<option value="">問題を選択</option>';
         $('problemSelect').disabled = true;
+        $('highlightedArea').innerHTML = '（添削後文を入力して「変更点をハイライト」を押すと、ここに表示されます。単語をタップして色やスタイルを変更できます。）';
+        $('styleToolbar').style.display = 'none';
         updateWordCount();
         localStorage.removeItem(STORAGE_KEY);
         alert('入力をリセットしました。');
@@ -296,6 +337,7 @@
         if (!id4) return alert('Step1 で4桁IDを入力してください。');
         const payload = {
           id4, name: $('name').value, message: $('message').value,
+          correctedText: $('correctedText').value, highlightData: getHighlightData(),
           feedback: $('feedback').value, reflection: $('reflection').value,
           gradeSelect: $('gradeSelect').value, problemSelect: $('problemSelect').value
         };
@@ -325,8 +367,10 @@
           $('id4').value = data.id4 || '';
           $('name').value = data.name || '';
           $('message').value = data.message || '';
+          $('correctedText').value = data.correctedText || '';
           $('feedback').value = data.feedback || '';
           $('reflection').value = data.reflection || '';
+          if (data.highlightData) restoreHighlightData(data.highlightData);
           applySavedDataToSelects(data);
           updateWordCount();
           saveToLocal();
@@ -363,6 +407,7 @@
     function submitPortfolio() {
       const payload = {
         id4: $('id4').value, name: $('name').value, message: $('message').value,
+        correctedText: $('correctedText').value, highlightData: getHighlightData(),
         feedback: $('feedback').value, reflection: $('reflection').value,
         spreadsheetId: $('gradeSelect').value, serial: selectedProblemMeta?.serial,
         title: selectedProblemMeta?.title, imageB64: compressedImageB64
@@ -389,6 +434,164 @@
         })
         .enqueueEssay(payload);
     }
+
+    // --- ハイライト機能と差分アルゴリズム ---
+    $('diffBtn').onclick = () => {
+      const orig = $('message').value;
+      const corr = $('correctedText').value;
+      if(!corr) return alert('添削後文が入力されていません。');
+      
+      const origWords = tokenize(orig);
+      const corrWords = tokenize(corr);
+      
+      const lcsMatrix = Array(origWords.length + 1).fill(null).map(() => Array(corrWords.length + 1).fill(0));
+      for (let i = 1; i <= origWords.length; i++) {
+        for (let j = 1; j <= corrWords.length; j++) {
+          if (origWords[i-1] === corrWords[j-1]) {
+            lcsMatrix[i][j] = lcsMatrix[i-1][j-1] + 1;
+          } else {
+            lcsMatrix[i][j] = Math.max(lcsMatrix[i-1][j], lcsMatrix[i][j-1]);
+          }
+        }
+      }
+      
+      let i = origWords.length, j = corrWords.length;
+      const result = [];
+      while (i > 0 || j > 0) {
+        if (i > 0 && j > 0 && origWords[i-1] === corrWords[j-1]) {
+          result.unshift({ text: corrWords[j-1], type: 'equal' });
+          i--; j--;
+        } else if (j > 0 && (i === 0 || lcsMatrix[i][j-1] >= lcsMatrix[i-1][j])) {
+          result.unshift({ text: corrWords[j-1], type: 'insert' });
+          j--;
+        } else {
+          i--;
+        }
+      }
+      
+      const container = $('highlightedArea');
+      container.innerHTML = '';
+      result.forEach((token) => {
+        const span = document.createElement('span');
+        span.textContent = token.text;
+        span.className = 'word';
+        if (token.type === 'insert' && token.text.trim().length > 0) {
+          span.style.color = 'red';
+        }
+        if (token.text.trim().length === 0) {
+          span.classList.add('space');
+        }
+        span.onclick = () => toggleSelectWord(span);
+        container.appendChild(span);
+      });
+      $('styleToolbar').style.display = 'flex';
+      saveToLocal();
+    };
+
+    $('clearHighlightBtn').onclick = () => {
+      const container = $('highlightedArea');
+      Array.from(container.children).forEach(span => {
+        span.style.color = ''; span.style.backgroundColor = ''; span.style.fontWeight = '';
+        span.style.fontStyle = ''; span.style.textDecoration = ''; span.classList.remove('selected');
+      });
+      $('styleToolbar').style.display = 'none';
+      saveToLocal();
+    };
+
+    function tokenize(text) {
+      return text.match(/[\w'-]+|[^\w'-]+/g) || [];
+    }
+
+    function toggleSelectWord(span) {
+      span.classList.toggle('selected');
+      if($('highlightedArea').querySelectorAll('.selected').length > 0) {
+        $('styleToolbar').style.display = 'flex';
+      }
+    }
+
+    function applyStyle(type, val) {
+      const words = Array.from($('highlightedArea').children);
+      let firstSelected = -1, lastSelected = -1;
+      words.forEach((w, i) => {
+        if (w.classList.contains('selected')) {
+          if (firstSelected === -1) firstSelected = i;
+          lastSelected = i;
+        }
+      });
+      
+      if (firstSelected === -1) return;
+      
+      for (let i = firstSelected; i <= lastSelected; i++) {
+        const w = words[i];
+        if (type === 'color') w.style.color = val;
+        if (type === 'bg') w.style.backgroundColor = val;
+        if (type === 'bold') w.style.fontWeight = w.style.fontWeight === 'bold' ? 'normal' : 'bold';
+        if (type === 'italic') w.style.fontStyle = w.style.fontStyle === 'italic' ? 'normal' : 'italic';
+        if (type === 'underline') w.style.textDecoration = w.style.textDecoration === 'underline' ? 'none' : 'underline';
+        if (type === 'clear') {
+           w.style.color = ''; w.style.backgroundColor = ''; w.style.fontWeight = ''; w.style.fontStyle = ''; w.style.textDecoration = '';
+        }
+        w.classList.remove('selected');
+      }
+      saveToLocal();
+    }
+
+    function getHighlightData() {
+      const container = $('highlightedArea');
+      if (container.innerText.includes('添削後文を入力して')) return null;
+      const runs = [];
+      Array.from(container.children).forEach(span => {
+        runs.push({
+          text: span.textContent,
+          color: span.style.color || null,
+          bg: span.style.backgroundColor || null,
+          bold: span.style.fontWeight === 'bold',
+          italic: span.style.fontStyle === 'italic',
+          underline: span.style.textDecoration === 'underline' || span.style.textDecoration.includes('underline')
+        });
+      });
+      return runs;
+    }
+
+    function restoreHighlightData(runs) {
+      const container = $('highlightedArea');
+      container.innerHTML = '';
+      runs.forEach((run) => {
+        const span = document.createElement('span');
+        span.textContent = run.text;
+        span.className = 'word';
+        if (run.text.trim().length === 0) span.classList.add('space');
+        
+        if (run.color) span.style.color = run.color;
+        if (run.bg) span.style.backgroundColor = run.bg;
+        if (run.bold) span.style.fontWeight = 'bold';
+        if (run.italic) span.style.fontStyle = 'italic';
+        if (run.underline) span.style.textDecoration = 'underline';
+        
+        span.onclick = () => toggleSelectWord(span);
+        container.appendChild(span);
+      });
+      $('styleToolbar').style.display = 'flex';
+    }
+
+    // --- 管理者用：一斉書込 ---
+    $('batchWriteBtn').onclick = () => {
+      $('batchWriteBtn').disabled = true;
+      $('batchWriteBtn').textContent = '処理中...';
+      google.script.run
+        .withSuccessHandler(res => {
+          $('batchWriteBtn').disabled = false;
+          $('batchWriteBtn').textContent = '一斉書込を実行';
+          alert(res.message);
+        })
+        .withFailureHandler(err => {
+          $('batchWriteBtn').disabled = false;
+          $('batchWriteBtn').textContent = '一斉書込を実行';
+          alert('エラー: ' + err);
+        })
+        .triggerBatchProcess();
+    };
+
   </script>
 </body>
 </html>
