@@ -44,7 +44,7 @@
     .btn-tool { background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 20px; font-size: 1.3em; font-weight: bold; cursor: pointer; margin: 2px; transition: 0.2s; }
     .btn-tool:hover { background: #e2e8f0; }
     .word { cursor: pointer; display: inline-block; border-radius: 2px; }
-    .word.selected { outline: 2px solid var(--accent); background-color: #dbeafe !important; }
+    .word.selected, .word.in-range { outline: 2px solid var(--accent); background-color: #dbeafe !important; }
     
     .switch-container {
       display: inline-flex;
@@ -763,7 +763,8 @@
       const container = $('highlightedArea');
       Array.from(container.children).forEach(span => {
         span.style.color = ''; span.style.backgroundColor = ''; span.style.fontWeight = '';
-        span.style.fontStyle = ''; span.style.textDecoration = ''; span.classList.remove('selected');
+        span.style.fontStyle = ''; span.style.textDecoration = ''; 
+        span.classList.remove('selected', 'in-range');
       });
       $('styleToolbar').style.display = 'none';
       saveToLocal();
@@ -781,8 +782,35 @@
 
     function toggleSelectWord(span) {
       span.classList.toggle('selected');
-      if($('highlightedArea').querySelectorAll('.selected').length > 0) {
+      updateSelectionVisuals();
+    }
+
+    function updateSelectionVisuals() {
+      const mode = $('selectionModeSwitch') ? $('selectionModeSwitch').getAttribute('data-state') : '1';
+      const container = $('highlightedArea');
+      if (!container) return;
+      const words = Array.from(container.children);
+      
+      words.forEach(w => w.classList.remove('in-range'));
+      
+      let firstSelected = -1, lastSelected = -1;
+      words.forEach((w, i) => {
+        if (w.classList.contains('selected')) {
+          if (firstSelected === -1) firstSelected = i;
+          lastSelected = i;
+        }
+      });
+      
+      if (mode === '2' && firstSelected !== -1 && lastSelected !== -1 && firstSelected !== lastSelected) {
+        for (let i = firstSelected + 1; i < lastSelected; i++) {
+          words[i].classList.add('in-range');
+        }
+      }
+      
+      if (firstSelected !== -1) {
         $('styleToolbar').style.display = 'flex';
+      } else {
+        $('styleToolbar').style.display = 'none';
       }
     }
 
@@ -805,6 +833,7 @@
       $('opt1').classList.toggle('active', mode === '1');
       $('opt2').classList.toggle('active', mode === '2');
       localStorage.setItem('dwp_selection_mode', mode);
+      updateSelectionVisuals();
     }
 
     function applyStyle(type, val) {
@@ -836,8 +865,9 @@
         if (!selectedFound) return;
       }
       
-      words.forEach(w => w.classList.remove('selected'));
+      words.forEach(w => w.classList.remove('selected', 'in-range'));
       saveToLocal();
+      updateSelectionVisuals();
     }
 
     function applyStyleToWord(w, type, val) {
