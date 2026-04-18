@@ -5,6 +5,58 @@ function doGet() {
     .addMetaTag('viewport', 'width=device-width,initial-scale=1');
 }
 
+/*** === APIエントリーポイント === ***/
+function doPost(e) {
+  try {
+    const params = JSON.parse(e.postData.contents);
+    const action = params.action;
+    let data;
+
+    switch (action) {
+      case 'getInitialData':
+        data = getInitialData();
+        break;
+      case 'listProblems':
+        data = listProblems(params.spreadsheetId, params.force);
+        break;
+      case 'getProblem':
+        data = getProblem(params.spreadsheetId, params.rowIndex);
+        break;
+      case 'refreshGradesCache':
+        data = refreshGradesCache();
+        break;
+      case 'saveBackupToCloud':
+        data = saveBackupToCloud(params.payload);
+        break;
+      case 'loadBackupFromCloud':
+        data = loadBackupFromCloud(params.id4);
+        break;
+      case 'deleteBackupFromCloud':
+        data = deleteBackupFromCloud(params.id4);
+        break;
+      case 'enqueueEssay':
+        data = enqueueEssay(params.payload);
+        break;
+      case 'triggerBatchProcess':
+        data = triggerBatchProcess();
+        break;
+      default:
+        throw new Error('不明なアクションです: ' + action);
+    }
+
+    // CORSのプリフライト回避のため、フロントからは text/plain で送られてくるが、
+    // 戻り値はJSONとして返す
+    const output = ContentService.createTextOutput(JSON.stringify({ ok: true, data: data }));
+    output.setMimeType(ContentService.MimeType.JSON);
+    return output;
+
+  } catch (err) {
+    const output = ContentService.createTextOutput(JSON.stringify({ ok: false, error: err.message }));
+    output.setMimeType(ContentService.MimeType.JSON);
+    return output;
+  }
+}
+
 /*** === 共通ユーティリティ === ***/
 function _s(v){ return v==null ? '' : String(v).trim(); }
 

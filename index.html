@@ -232,6 +232,24 @@
   </div>
 
   <script>
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbxjrrEKZSMxMyKGgd0-nsC0YHv0Q1-tCVfIepz3rNanWP_K6Lwh7sfZvBhbG_2X9TjN/exec";
+
+    async function callGasApi(action, params = {}) {
+      try {
+        const res = await fetch(GAS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ action, ...params })
+        });
+        const json = await res.json();
+        if (!json.ok) throw new Error(json.error);
+        return json.data;
+      } catch(err) {
+        console.error("API Error:", err);
+        throw err;
+      }
+    }
+
     let selectedGradeId = "";
     let selectedProblemMeta = null;
     let gemUrl = "";
@@ -329,7 +347,7 @@
         if (el) el.addEventListener('change', () => { if(!isRestoring) saveToLocal(); });
       });
 
-      google.script.run.withSuccessHandler(data => {
+      callGasApi('getInitialData').then(data => {
         gemUrl = data.gemUrl;
         if(gemUrl) $('gemBtn').disabled = false;
         populateGrades(data.grades);
@@ -340,24 +358,26 @@
           applySavedDataToSelects(savedData);
         }
         updateWordCount();
-      }).getInitialData();
+      }).catch(err => {
+        alert('初期データの読み込みに失敗しました。');
+      });
 
       $('gradeSelect').onchange = () => {
         const gid = $('gradeSelect').value;
         if(!gid) return;
         $('problemSelect').innerHTML = '<option>読み込み中...</option>';
-        google.script.run.withSuccessHandler(arr => {
+        callGasApi('listProblems', { spreadsheetId: gid, force: false }).then(arr => {
           $('problemSelect').innerHTML = '<option value="">問題を選択</option>';
           arr.forEach(p => $('problemSelect').appendChild(new Option(p.label, p.rowIndex)));
           $('problemSelect').disabled = false;
-        }).listProblems(gid, false);
+        });
       };
 
       $('problemSelect').onchange = () => {
-        google.script.run.withSuccessHandler(meta => {
+        callGasApi('getProblem', { spreadsheetId: $('gradeSelect').value, rowIndex: $('problemSelect').value }).then(meta => {
           selectedProblemMeta = meta;
           $('problemBody').textContent = meta.body;
-        }).getProblem($('gradeSelect').value, $('problemSelect').value);
+        });
       };
 
       $('gemBtn').onclick = async () => {
@@ -447,22 +467,22 @@
       isRestoring = true;
       $('gradeSelect').value = savedData.gradeSelect;
       $('problemSelect').innerHTML = '<option>読み込み中...</option>';
-      google.script.run.withSuccessHandler(arr => {
+      callGasApi('listProblems', { spreadsheetId: savedData.gradeSelect, force: false }).then(arr => {
         $('problemSelect').innerHTML = '<option value="">問題を選択</option>';
         arr.forEach(p => $('problemSelect').appendChild(new Option(p.label, p.rowIndex)));
         $('problemSelect').disabled = false;
         
         if (savedData.problemSelect) {
           $('problemSelect').value = savedData.problemSelect;
-          google.script.run.withSuccessHandler(meta => {
+          callGasApi('getProblem', { spreadsheetId: savedData.gradeSelect, rowIndex: savedData.problemSelect }).then(meta => {
             selectedProblemMeta = meta;
             $('problemBody').textContent = meta.body;
             isRestoring = false;
-          }).getProblem(savedData.gradeSelect, savedData.problemSelect);
+          });
         } else {
           isRestoring = false;
         }
-      }).listProblems(savedData.gradeSelect, false);
+      });
     }
 
     function setupBackupAndResetUI() {
@@ -497,7 +517,7 @@
         $('backupStatusText').textContent = 'クラウドデータを確認中...';
         $('cloudLoadBtn').disabled = true;
         $('cloudDeleteBtn').disabled = true;
-        google.script.run.withSuccessHandler(data => {
+        callGasApi('loadBackupFromCloud', { id4 }).then(data => {
           if (data) {
             $('backupStatusText').innerHTML = `<b>保存済みデータあり</b> (最終保存: ${data.savedAtJST})`;
             $('cloudLoadBtn').disabled = false;
@@ -505,7 +525,7 @@
           } else {
             $('backupStatusText').textContent = '保存されているデータはありません。';
           }
-        }).loadBackupFromCloud(id4);
+        });
       }
 
       $('cloudSaveBtn').onclick = () => {
@@ -521,16 +541,16 @@
         };
         $('cloudSaveBtn').disabled = true;
         $('cloudSaveBtn').textContent = '保存中...';
-        google.script.run.withSuccessHandler(res => {
+        callGasApi('saveBackupToCloud', { payload }).then(res => {
           $('cloudSaveBtn').disabled = false;
           $('cloudSaveBtn').textContent = '保存する';
           checkCloudBackup();
           alert('クラウドへ一時保存しました。');
-        }).withFailureHandler(err => {
+        }).catch(err => {
           $('cloudSaveBtn').disabled = false;
           $('cloudSaveBtn').textContent = '保存する';
           alert('保存エラー: ' + err.message);
-        }).saveBackupToCloud(payload);
+        });
       };
 
       $('cloudLoadBtn').onclick = () => {
@@ -538,7 +558,7 @@
         if (!id4) return;
         if (!confirm('現在入力されている内容は上書きされます。よろしいですか？')) return;
         $('cloudLoadBtn').disabled = true;
-        google.script.run.withSuccessHandler(data => {
+        callGasApi('loadBackupFromCloud', { id4 }).then(data => {
           $('cloudLoadBtn').disabled = false;
           if (!data) return alert('データが見つかりませんでした。');
           
@@ -555,7 +575,10 @@
           updateWordCount();
           saveToLocal();
           alert('クラウドから読み込みました。');
-        }).loadBackupFromCloud(id4);
+        }).catch(err => {
+          $('cloudLoadBtn').disabled = false;
+          alert('読み込みエラー: ' + err.message);
+        });
       };
 
       $('cloudDeleteBtn').onclick = () => {
@@ -563,10 +586,13 @@
         if (!id4) return;
         if (!confirm('クラウドのデータを完全に削除しますか？')) return;
         $('cloudDeleteBtn').disabled = true;
-        google.script.run.withSuccessHandler(res => {
+        callGasApi('deleteBackupFromCloud', { id4 }).then(res => {
           checkCloudBackup();
           alert('削除しました。');
-        }).deleteBackupFromCloud(id4);
+        }).catch(err => {
+          $('cloudDeleteBtn').disabled = false;
+          alert('削除エラー: ' + err.message);
+        });
       };
     }
 
@@ -578,10 +604,13 @@
 
     function refreshGrades() {
       $('refBtn').textContent = '...';
-      google.script.run.withSuccessHandler(arr => {
+      callGasApi('refreshGradesCache').then(arr => {
         populateGrades(arr);
         $('refBtn').textContent = '更新';
-      }).refreshGradesCache();
+      }).catch(err => {
+        $('refBtn').textContent = '更新';
+        alert('更新エラー: ' + err.message);
+      });
     }
 
     function submitPortfolio() {
@@ -606,19 +635,17 @@
       $('submitBtn').disabled = true;
       $('statusMsg').textContent = 'PDFを作成して保存中... (30秒ほどかかります)';
 
-      google.script.run
-        .withSuccessHandler(res => {
-          $('statusMsg').textContent = '提出完了しました！';
-          $('statusMsg').style.color = '#059669';
-          $('downloadBtn').href = res.fileUrl;
-          $('downloadBtn').style.display = 'inline-flex';
-          $('submitBtn').disabled = false;
-        })
-        .withFailureHandler(err => {
-          alert('エラー: ' + err);
-          $('submitBtn').disabled = false;
-        })
-        .enqueueEssay(payload);
+      callGasApi('enqueueEssay', { payload }).then(res => {
+        $('statusMsg').textContent = '提出完了しました！';
+        $('statusMsg').style.color = '#059669';
+        $('downloadBtn').href = res.fileUrl;
+        $('downloadBtn').style.display = 'inline-flex';
+        $('submitBtn').disabled = false;
+      }).catch(err => {
+        alert('エラー: ' + err.message);
+        $('submitBtn').disabled = false;
+        $('statusMsg').textContent = '提出に失敗しました';
+      });
     }
 
     // --- リッチテキストパーサー ---
@@ -866,18 +893,15 @@
     $('batchWriteBtn').onclick = () => {
       $('batchWriteBtn').disabled = true;
       $('batchWriteBtn').textContent = '処理中...';
-      google.script.run
-        .withSuccessHandler(res => {
-          $('batchWriteBtn').disabled = false;
-          $('batchWriteBtn').textContent = '一斉書込を実行';
-          alert(res.message);
-        })
-        .withFailureHandler(err => {
-          $('batchWriteBtn').disabled = false;
-          $('batchWriteBtn').textContent = '一斉書込を実行';
-          alert('エラー: ' + err);
-        })
-        .triggerBatchProcess();
+      callGasApi('triggerBatchProcess').then(res => {
+        $('batchWriteBtn').disabled = false;
+        $('batchWriteBtn').textContent = '一斉書込を実行';
+        alert(res.message);
+      }).catch(err => {
+        $('batchWriteBtn').disabled = false;
+        $('batchWriteBtn').textContent = '一斉書込を実行';
+        alert('エラー: ' + err.message);
+      });
     };
 
   </script>
