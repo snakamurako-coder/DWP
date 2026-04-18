@@ -6,7 +6,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>デジタル・ライティング・ポートフォリオ</title>
   <style>
-    :root { --primary: #1e293b; --accent: #2563eb; --bg: #f8fafc; }
+    :root { 
+      --primary: #1e293b; --accent: #2563eb; --bg: #f8fafc;
+      --eng-font: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      --eng-size: 16px;
+    }
     body { font-family: system-ui,-apple-system,sans-serif; padding: 15px; background: var(--bg); color: #334155; max-width: 900px; margin: 0 auto; line-height: 1.5; }
     h2 { text-align: center; color: var(--primary); margin-bottom: 20px; }
     
@@ -16,7 +20,9 @@
     label { font-weight: 600; font-size: 0.9em; display: block; margin-bottom: 5px; color: #64748b; }
     select, input[type="text"], textarea { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 16px; margin-bottom: 15px; }
     
-    textarea#message { font-family: "Georgia", serif; line-height: 1.8; background: #fff; }
+    [contenteditable="true"]:empty:before { content: attr(placeholder); color: #94a3b8; pointer-events: none; display: block; }
+    
+    .eng-text-area { font-family: var(--eng-font); font-size: var(--eng-size); line-height: 1.8; background: #fff; }
     .viewbox { background: #f1f5f9; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 0.95em; white-space: pre-wrap; margin-bottom: 15px; }
     
     .btn { display: inline-flex; align-items: center; justify-content: center; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; border: none; transition: 0.2s; text-decoration: none; }
@@ -44,6 +50,24 @@
 <body>
 
   <h2>デジタル・ライティング・ポートフォリオ</h2>
+
+  <div class="card" style="padding: 10px 20px; margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+    <div style="font-weight: bold; color: var(--primary);">⚙️ 英文の表示設定</div>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <select id="fontFamilySelect" onchange="changeFontFamily()" style="width:auto; padding:6px 10px; margin:0; font-size:0.9em; border-radius:4px;">
+        <option value="'Segoe UI', 'Helvetica Neue', Arial, sans-serif">Segoe UI (標準・太字が明確)</option>
+        <option value="Georgia, serif">Georgia</option>
+        <option value="'Times New Roman', serif">Times New Roman</option>
+        <option value="'Courier New', monospace">Courier New</option>
+        <option value="'Comic Sans MS', cursive">Comic Sans</option>
+      </select>
+      <div style="display: flex; align-items: center; gap: 5px;">
+        <button type="button" class="btn-tool" onclick="changeFontSize(-1)">A-</button>
+        <span id="fontSizeDisplay" style="font-size:0.9em; width:35px; text-align:center; font-weight:bold;">16px</span>
+        <button type="button" class="btn-tool" onclick="changeFontSize(1)">A+</button>
+      </div>
+    </div>
+  </div>
 
   <div class="card" style="margin-bottom: 15px;">
     <div class="section-title">データ管理・引き継ぎ</div>
@@ -84,19 +108,30 @@
       <div id="wordCount" class="word-badge">0 words</div>
     </div>
     <div id="imeWarning">日本語入力は禁止です。IMEをオフにしてください。</div>
-    <textarea id="message" rows="8" placeholder="Type your English draft here..."></textarea>
+    <textarea id="message" class="eng-text-area" rows="8" placeholder="Type your English draft here..."></textarea>
     <div class="note">※コピペ・予測変換は使えません。</div>
   </div>
 
   <div class="card">
     <div class="section-title">Step 2: AI添削と振り返り</div>
+    <div style="display:flex; flex-direction:column; gap:5px; margin-bottom:15px; background:#f1f5f9; padding:10px; border-radius:8px;">
+      <label style="display:flex; align-items:center; gap:8px; margin:0; cursor:pointer;">
+        <input type="checkbox" id="inheritPdfStyles" checked>
+        AIからのアドバイス（貼り付け）のフォント情報をPDFに反映させる
+      </label>
+      <label style="display:flex; align-items:center; gap:8px; margin:0; cursor:pointer;">
+        <input type="checkbox" id="inheritHighlightStyles" checked>
+        添削後文ハイライトにフォント情報を反映させる
+      </label>
+    </div>
+    
     <button id="gemBtn" class="btn btn-gem" type="button" disabled>📝 原文をコピーして AI(Gem) を開く</button>
     
     <label>AIからのアドバイス (貼り付け)</label>
-    <textarea id="feedback" rows="5" placeholder="AIの回答をここにペースト"></textarea>
+    <div id="feedback" class="eng-text-area" contenteditable="true" style="min-height: 120px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; margin-bottom: 15px; overflow-y: auto;" placeholder="AIの回答をここにペースト"></div>
 
     <label>添削後文 (Corrected Text)</label>
-    <textarea id="correctedText" rows="6" placeholder="AIの添削結果を元に、修正した英文をペースト"></textarea>
+    <div id="correctedText" class="eng-text-area" contenteditable="true" style="min-height: 140px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; margin-bottom: 15px; overflow-y: auto;" placeholder="AIの添削結果を元に、修正した英文をペースト"></div>
 
     <label>添削後文ハイライト</label>
     <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
@@ -118,7 +153,7 @@
       <button type="button" class="btn-tool" onclick="applyStyle('clear')">リセット</button>
     </div>
 
-    <div id="highlightedArea" class="viewbox" style="min-height: 100px;">（添削後文を入力して「変更点をハイライト」を押すと、ここに表示されます。単語をタップして色やスタイルを変更できます。）</div>
+    <div id="highlightedArea" class="viewbox eng-text-area" style="min-height: 100px;">（添削後文を入力して「変更点をハイライト」を押すと、ここに表示されます。単語をタップして色やスタイルを変更できます。）</div>
 
     <label>振り返り (日本語可)</label>
     <textarea id="reflection" rows="4" placeholder="学んだこと、次回の目標など"></textarea>
@@ -190,13 +225,21 @@
 
     // 初期化
     window.onload = () => {
+      loadSettings();
       applyStrictInput($('message'));
       $('id4').addEventListener('input', (e) => e.target.value = e.target.value.replace(/\D/g, ''));
       
       // 自動保存イベントの登録
       ['id4', 'name', 'message', 'feedback', 'reflection', 'correctedText', 'gradeSelect', 'problemSelect'].forEach(id => {
-        $(id).addEventListener('input', () => { if(!isRestoring) saveToLocal(); });
-        $(id).addEventListener('change', () => { if(!isRestoring) saveToLocal(); });
+        const el = $(id);
+        if (el) {
+          el.addEventListener('input', () => { if(!isRestoring) saveToLocal(); });
+          el.addEventListener('change', () => { if(!isRestoring) saveToLocal(); });
+        }
+      });
+      ['inheritHighlightStyles', 'inheritPdfStyles'].forEach(id => {
+        const el = $(id);
+        if (el) el.addEventListener('change', () => { if(!isRestoring) saveToLocal(); });
       });
 
       google.script.run.withSuccessHandler(data => {
@@ -241,12 +284,55 @@
       setupBackupAndResetUI();
     };
 
+    function changeFontSize(delta) {
+      let currentSize = parseInt(document.documentElement.style.getPropertyValue('--eng-size')) || 16;
+      currentSize += delta * 2;
+      if (currentSize < 12) currentSize = 12;
+      if (currentSize > 40) currentSize = 40;
+      document.documentElement.style.setProperty('--eng-size', currentSize + 'px');
+      $('fontSizeDisplay').textContent = currentSize + 'px';
+      saveSettings();
+    }
+
+    function changeFontFamily() {
+      const font = $('fontFamilySelect').value;
+      document.documentElement.style.setProperty('--eng-font', font);
+      saveSettings();
+    }
+
+    function saveSettings() {
+      const settings = {
+        font: document.documentElement.style.getPropertyValue('--eng-font'),
+        size: document.documentElement.style.getPropertyValue('--eng-size')
+      };
+      localStorage.setItem('dwp_display_settings', JSON.stringify(settings));
+    }
+
+    function loadSettings() {
+      const jsonStr = localStorage.getItem('dwp_display_settings');
+      let font = "'Segoe UI', 'Helvetica Neue', Arial, sans-serif";
+      let size = "16px";
+      if (jsonStr) {
+        try {
+          const settings = JSON.parse(jsonStr);
+          if (settings.font) font = settings.font;
+          if (settings.size) size = settings.size;
+        } catch(e) {}
+      }
+      document.documentElement.style.setProperty('--eng-font', font);
+      document.documentElement.style.setProperty('--eng-size', size);
+      $('fontFamilySelect').value = font;
+      $('fontSizeDisplay').textContent = size;
+    }
+
     function saveToLocal() {
       const data = {
         id4: $('id4').value, name: $('name').value, message: $('message').value,
-        correctedText: $('correctedText').value, feedback: $('feedback').value, 
+        correctedText: $('correctedText').innerHTML, feedback: $('feedback').innerHTML, 
         reflection: $('reflection').value, gradeSelect: $('gradeSelect').value, 
-        problemSelect: $('problemSelect').value, highlightData: getHighlightData()
+        problemSelect: $('problemSelect').value, highlightData: getHighlightData(),
+        inheritHighlightStyles: $('inheritHighlightStyles').checked,
+        inheritPdfStyles: $('inheritPdfStyles').checked
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     }
@@ -259,9 +345,11 @@
         $('id4').value = data.id4 || '';
         $('name').value = data.name || '';
         $('message').value = data.message || '';
-        $('correctedText').value = data.correctedText || '';
-        $('feedback').value = data.feedback || '';
+        $('correctedText').innerHTML = data.correctedText || '';
+        $('feedback').innerHTML = data.feedback || '';
         $('reflection').value = data.reflection || '';
+        $('inheritHighlightStyles').checked = data.inheritHighlightStyles !== false;
+        $('inheritPdfStyles').checked = data.inheritPdfStyles !== false;
         if (data.highlightData) restoreHighlightData(data.highlightData);
         return data;
       } catch(e) { return false; }
@@ -299,7 +387,8 @@
 
       $('resetInputBtn').onclick = () => {
         if(!confirm("本当に入力内容をすべて消去しますか？\n（※クラウドに保存していないデータは二度と戻りません）")) return;
-        ['id4', 'name', 'message', 'correctedText', 'feedback', 'reflection', 'gradeSelect', 'problemSelect'].forEach(id => { $(id).value = ''; });
+        ['id4', 'name', 'message', 'reflection', 'gradeSelect', 'problemSelect'].forEach(id => { $(id).value = ''; });
+        ['correctedText', 'feedback'].forEach(id => { $(id).innerHTML = ''; });
         $('problemBody').textContent = '（問題文が表示されます）';
         $('problemSelect').innerHTML = '<option value="">問題を選択</option>';
         $('problemSelect').disabled = true;
@@ -337,9 +426,11 @@
         if (!id4) return alert('Step1 で4桁IDを入力してください。');
         const payload = {
           id4, name: $('name').value, message: $('message').value,
-          correctedText: $('correctedText').value, highlightData: getHighlightData(),
-          feedback: $('feedback').value, reflection: $('reflection').value,
-          gradeSelect: $('gradeSelect').value, problemSelect: $('problemSelect').value
+          correctedText: $('correctedText').innerHTML, highlightData: getHighlightData(),
+          feedback: $('feedback').innerHTML, reflection: $('reflection').value,
+          gradeSelect: $('gradeSelect').value, problemSelect: $('problemSelect').value,
+          inheritHighlightStyles: $('inheritHighlightStyles').checked,
+          inheritPdfStyles: $('inheritPdfStyles').checked
         };
         $('cloudSaveBtn').disabled = true;
         $('cloudSaveBtn').textContent = '保存中...';
@@ -367,9 +458,11 @@
           $('id4').value = data.id4 || '';
           $('name').value = data.name || '';
           $('message').value = data.message || '';
-          $('correctedText').value = data.correctedText || '';
-          $('feedback').value = data.feedback || '';
+          $('correctedText').innerHTML = data.correctedText || '';
+          $('feedback').innerHTML = data.feedback || '';
           $('reflection').value = data.reflection || '';
+          $('inheritHighlightStyles').checked = data.inheritHighlightStyles !== false;
+          $('inheritPdfStyles').checked = data.inheritPdfStyles !== false;
           if (data.highlightData) restoreHighlightData(data.highlightData);
           applySavedDataToSelects(data);
           updateWordCount();
@@ -407,8 +500,14 @@
     function submitPortfolio() {
       const payload = {
         id4: $('id4').value, name: $('name').value, message: $('message').value,
-        correctedText: $('correctedText').value, highlightData: getHighlightData(),
-        feedback: $('feedback').value, reflection: $('reflection').value,
+        correctedText: $('correctedText').innerHTML, 
+        correctedTextPlain: $('correctedText').innerText,
+        highlightData: getHighlightData(),
+        feedback: $('feedback').innerHTML, 
+        feedbackPlain: $('feedback').innerText,
+        reflection: $('reflection').value,
+        feedbackData: extractRichTextRuns($('feedback')),
+        inheritPdfStyles: $('inheritPdfStyles').checked,
         spreadsheetId: $('gradeSelect').value, serial: selectedProblemMeta?.serial,
         title: selectedProblemMeta?.title, imageB64: compressedImageB64
       };
@@ -435,14 +534,61 @@
         .enqueueEssay(payload);
     }
 
+    // --- リッチテキストパーサー ---
+    function extractRichTextRuns(element) {
+      if (!element) return [];
+      const runs = [];
+      function traverse(node, currentStyle) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          if (node.textContent.length > 0) runs.push({ text: node.textContent, ...currentStyle });
+          return;
+        }
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          if (node.tagName === 'BR') { runs.push({ text: '\n', ...currentStyle }); return; }
+          const newStyle = { ...currentStyle };
+          const tag = node.tagName.toLowerCase();
+          const style = window.getComputedStyle(node);
+          
+          if (tag === 'b' || tag === 'strong' || style.fontWeight === 'bold' || parseInt(style.fontWeight) >= 700) newStyle.bold = true;
+          if (tag === 'i' || tag === 'em' || style.fontStyle === 'italic') newStyle.italic = true;
+          if (tag === 'u' || style.textDecoration.includes('underline')) newStyle.underline = true;
+          
+          Array.from(node.childNodes).forEach(child => traverse(child, newStyle));
+          
+          if (style.display === 'block' || tag === 'p' || tag === 'div') {
+            runs.push({ text: '\n', ...currentStyle });
+          }
+        }
+      }
+      Array.from(element.childNodes).forEach(child => traverse(child, {}));
+      while(runs.length > 0 && runs[runs.length-1].text === '\n') runs.pop();
+      return runs;
+    }
+
     // --- ハイライト機能と差分アルゴリズム ---
     $('diffBtn').onclick = () => {
       const orig = $('message').value;
-      const corr = $('correctedText').value;
-      if(!corr) return alert('添削後文が入力されていません。');
+      let corrText = "";
+      let charStyles = [];
       
-      const origWords = tokenize(orig);
-      const corrWords = tokenize(corr);
+      if ($('inheritHighlightStyles').checked) {
+        const corrRuns = extractRichTextRuns($('correctedText'));
+        corrRuns.forEach(run => {
+          for (let i=0; i<run.text.length; i++) {
+            corrText += run.text[i];
+            charStyles.push({ bold: run.bold, italic: run.italic, underline: run.underline });
+          }
+        });
+      } else {
+        corrText = $('correctedText').innerText || '';
+      }
+      
+      if(!corrText.trim()) return alert('添削後文が入力されていません。');
+      
+      const origTokens = tokenizeWithIndices(orig);
+      const corrTokens = tokenizeWithIndices(corrText);
+      const origWords = origTokens.map(t=>t.text);
+      const corrWords = corrTokens.map(t=>t.text);
       
       const lcsMatrix = Array(origWords.length + 1).fill(null).map(() => Array(corrWords.length + 1).fill(0));
       for (let i = 1; i <= origWords.length; i++) {
@@ -459,10 +605,12 @@
       const result = [];
       while (i > 0 || j > 0) {
         if (i > 0 && j > 0 && origWords[i-1] === corrWords[j-1]) {
-          result.unshift({ text: corrWords[j-1], type: 'equal' });
+          const t = corrTokens[j-1];
+          result.unshift({ text: t.text, type: 'equal', index: t.index });
           i--; j--;
         } else if (j > 0 && (i === 0 || lcsMatrix[i][j-1] >= lcsMatrix[i-1][j])) {
-          result.unshift({ text: corrWords[j-1], type: 'insert' });
+          const t = corrTokens[j-1];
+          result.unshift({ text: t.text, type: 'insert', index: t.index });
           j--;
         } else {
           i--;
@@ -481,6 +629,15 @@
         if (token.text.trim().length === 0) {
           span.classList.add('space');
         }
+        
+        // 継承されたスタイルを適用
+        if ($('inheritHighlightStyles').checked && token.index < charStyles.length) {
+          const style = charStyles[token.index];
+          if (style.bold) span.style.fontWeight = 'bold';
+          if (style.italic) span.style.fontStyle = 'italic';
+          if (style.underline) span.style.textDecoration = 'underline';
+        }
+        
         span.onclick = () => toggleSelectWord(span);
         container.appendChild(span);
       });
@@ -498,8 +655,14 @@
       saveToLocal();
     };
 
-    function tokenize(text) {
-      return text.match(/[\w'-]+|[^\w'-]+/g) || [];
+    function tokenizeWithIndices(text) {
+      const regex = /[\w'-]+|[^\w'-]+/g;
+      let match;
+      const tokens = [];
+      while ((match = regex.exec(text)) !== null) {
+        tokens.push({ text: match[0], index: match.index });
+      }
+      return tokens;
     }
 
     function toggleSelectWord(span) {

@@ -366,10 +366,14 @@ function enqueueEssay(payload) {
   const id4 = _s(payload.id4);
   const name = _s(payload.name);
   const message = _s(payload.message);
-  const correctedText = _s(payload.correctedText);
+  const correctedTextHTML = _s(payload.correctedText);
+  const correctedTextPlain = _s(payload.correctedTextPlain || payload.correctedText).replace(/<[^>]+>/g, '');
   const highlightData = payload.highlightData;
-  const feedback = _s(payload.feedback);
+  const feedbackHTML = _s(payload.feedback);
+  const feedbackPlain = _s(payload.feedbackPlain || payload.feedback).replace(/<[^>]+>/g, '');
   const reflection = _s(payload.reflection);
+  const feedbackData = payload.feedbackData;
+  const inheritPdfStyles = payload.inheritPdfStyles;
   const spreadsheetId = _s(payload.spreadsheetId);
   const serial = _s(payload.serial);
   const title = _s(payload.title);
@@ -384,7 +388,7 @@ function enqueueEssay(payload) {
   const parentId = getParentFolderId_();
 
   // 1. JSON保存
-  const record = { timestamp, spreadsheetId, gradeSubject, serial, title, id4, name, message, correctedText, highlightData, wordCount, feedback, reflection };
+  const record = { timestamp, spreadsheetId, gradeSubject, serial, title, id4, name, message, correctedText: correctedTextHTML, correctedTextPlain, highlightData, wordCount, feedback: feedbackHTML, feedbackPlain, reflection };
   const inboxId = getSubfolderId_(parentId, 'inbox_submissions', {createIfMissing:true});
   DriveApp.getFolderById(inboxId).createFile(Utilities.newBlob(JSON.stringify(record, null, 2), 'application/json', fnameBase + '.json'));
 
@@ -407,7 +411,7 @@ function enqueueEssay(payload) {
   body.appendParagraph(message + "\n").setFontSize(14).setLineSpacing(1.5);
 
   // 2. 添削後文
-  if (correctedText) {
+  if (correctedTextPlain || correctedTextHTML) {
     body.appendParagraph("２．【添削後文 (Corrected Text)】").setHeading(DocumentApp.ParagraphHeading.HEADING2).setFontSize(18);
     if (highlightData && highlightData.length > 0) {
       const p = body.appendParagraph("");
@@ -423,7 +427,7 @@ function enqueueEssay(payload) {
       });
       body.appendParagraph("\n");
     } else {
-      body.appendParagraph(correctedText + "\n").setFontSize(14).setLineSpacing(1.5);
+      body.appendParagraph(correctedTextPlain + "\n").setFontSize(14).setLineSpacing(1.5);
     }
   }
 
@@ -448,7 +452,21 @@ function enqueueEssay(payload) {
 
   // 4. AIフィードバック
   body.appendParagraph("４．【AI フィードバック (AI Feedback)】").setHeading(DocumentApp.ParagraphHeading.HEADING2).setFontSize(18);
-  body.appendParagraph((feedback || "（入力なし）") + "\n").setFontSize(13);
+  if (inheritPdfStyles && feedbackData && feedbackData.length > 0) {
+    const p = body.appendParagraph("");
+    p.setFontSize(13);
+    feedbackData.forEach(run => {
+      const textElem = p.appendText(run.text);
+      if (run.color) textElem.setForegroundColor(run.color);
+      if (run.bg) textElem.setBackgroundColor(run.bg);
+      if (run.bold) textElem.setBold(true);
+      if (run.italic) textElem.setItalic(true);
+      if (run.underline) textElem.setUnderline(true);
+    });
+    body.appendParagraph("\n");
+  } else {
+    body.appendParagraph((feedbackPlain || "（入力なし）") + "\n").setFontSize(13);
+  }
 
   doc.saveAndClose();
   const pdfBlob = doc.getAs('application/pdf').setName(fnameBase + ".pdf");
