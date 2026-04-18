@@ -388,7 +388,7 @@ function enqueueEssay(payload) {
   const parentId = getParentFolderId_();
 
   // 1. JSON保存
-  const record = { timestamp, spreadsheetId, gradeSubject, serial, title, id4, name, message, correctedText: correctedTextHTML, correctedTextPlain, highlightData, wordCount, feedback: feedbackHTML, feedbackPlain, reflection };
+  const record = { timestamp, spreadsheetId, gradeSubject, serial, title, id4, name, message, correctedText: correctedTextHTML, correctedTextPlain, highlightData, wordCount, feedback: feedbackHTML, feedbackPlain, feedbackData, reflection };
   const inboxId = getSubfolderId_(parentId, 'inbox_submissions', {createIfMissing:true});
   DriveApp.getFolderById(inboxId).createFile(Utilities.newBlob(JSON.stringify(record, null, 2), 'application/json', fnameBase + '.json'));
 

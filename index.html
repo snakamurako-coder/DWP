@@ -229,6 +229,24 @@
       applyStrictInput($('message'));
       $('id4').addEventListener('input', (e) => e.target.value = e.target.value.replace(/\D/g, ''));
       
+      $('downloadBtn').addEventListener('click', () => {
+        setTimeout(() => {
+          if (confirm("入力欄をリセットしますか？（ID・氏名は次回のために保持されます）")) {
+            ['message', 'reflection', 'gradeSelect', 'problemSelect'].forEach(id => { $(id).value = ''; });
+            ['correctedText', 'feedback'].forEach(id => { $(id).innerHTML = ''; });
+            $('problemBody').textContent = '（問題文が表示されます）';
+            $('problemSelect').innerHTML = '<option value="">問題を選択</option>';
+            $('problemSelect').disabled = true;
+            $('highlightedArea').innerHTML = '（添削後文を入力して「変更点をハイライト」を押すと、ここに表示されます。単語をタップして色やスタイルを変更できます。）';
+            $('styleToolbar').style.display = 'none';
+            $('statusMsg').textContent = '';
+            $('downloadBtn').style.display = 'none';
+            updateWordCount();
+            saveToLocal();
+          }
+        }, 500);
+      });
+      
       // 自動保存イベントの登録
       ['id4', 'name', 'message', 'feedback', 'reflection', 'correctedText', 'gradeSelect', 'problemSelect'].forEach(id => {
         const el = $(id);
@@ -386,8 +404,8 @@
       };
 
       $('resetInputBtn').onclick = () => {
-        if(!confirm("本当に入力内容をすべて消去しますか？\n（※クラウドに保存していないデータは二度と戻りません）")) return;
-        ['id4', 'name', 'message', 'reflection', 'gradeSelect', 'problemSelect'].forEach(id => { $(id).value = ''; });
+        if(!confirm("本当に入力内容をすべて消去しますか？\n（ID・氏名は保持されます。クラウドに保存していないデータは二度と戻りません）")) return;
+        ['message', 'reflection', 'gradeSelect', 'problemSelect'].forEach(id => { $(id).value = ''; });
         ['correctedText', 'feedback'].forEach(id => { $(id).innerHTML = ''; });
         $('problemBody').textContent = '（問題文が表示されます）';
         $('problemSelect').innerHTML = '<option value="">問題を選択</option>';
@@ -395,7 +413,7 @@
         $('highlightedArea').innerHTML = '（添削後文を入力して「変更点をハイライト」を押すと、ここに表示されます。単語をタップして色やスタイルを変更できます。）';
         $('styleToolbar').style.display = 'none';
         updateWordCount();
-        localStorage.removeItem(STORAGE_KEY);
+        saveToLocal();
         alert('入力をリセットしました。');
       };
 
@@ -525,7 +543,7 @@
           $('statusMsg').style.color = '#059669';
           $('downloadBtn').href = res.fileUrl;
           $('downloadBtn').style.display = 'inline-flex';
-          localStorage.removeItem(STORAGE_KEY); // 提出成功時にローカル保存データをクリア
+          $('submitBtn').disabled = false;
         })
         .withFailureHandler(err => {
           alert('エラー: ' + err);
