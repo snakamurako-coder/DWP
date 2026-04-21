@@ -133,6 +133,15 @@ function setTextFontFamilySafe_(textElem, family) {
   }
 }
 
+function setTextDecorationsSafe_(textElem, run) {
+  var bold = !!(run && run.bold);
+  var italic = !!(run && run.italic);
+  var underline = !!(run && run.underline);
+  try { textElem.setBold(bold); } catch (e) {}
+  try { textElem.setItalic(italic); } catch (e) {}
+  try { textElem.setUnderline(underline); } catch (e) {}
+}
+
 function getParentFolderId_() {
   const scriptId = ScriptApp.getScriptId();
   const cache = CacheService.getScriptCache();
@@ -546,9 +555,7 @@ function enqueueEssay(payload) {
         const textElem = p.appendText(run.text);
         setTextForegroundSafe_(textElem, run.color);
         setTextBackgroundSafe_(textElem, run.bg);
-        if (run.bold) textElem.setBold(true);
-        if (run.italic) textElem.setItalic(true);
-        if (run.underline) textElem.setUnderline(true);
+        setTextDecorationsSafe_(textElem, run);
         if (run.fontSizePt != null) setTextFontSizeSafe_(textElem, run.fontSizePt);
         if (run.fontFamily) setTextFontFamilySafe_(textElem, run.fontFamily);
       });
@@ -586,9 +593,7 @@ function enqueueEssay(payload) {
       const textElem = p.appendText(run.text);
       setTextForegroundSafe_(textElem, run.color);
       setTextBackgroundSafe_(textElem, run.bg);
-      if (run.bold) textElem.setBold(true);
-      if (run.italic) textElem.setItalic(true);
-      if (run.underline) textElem.setUnderline(true);
+      setTextDecorationsSafe_(textElem, run);
     });
     body.appendParagraph("\n");
   } else {
