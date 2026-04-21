@@ -60,6 +60,57 @@ function doPost(e) {
 /*** === 共通ユーティリティ === ***/
 function _s(v){ return v==null ? '' : String(v).trim(); }
 
+/** rgb(...) / 3桁hex / 色名 などを #rrggbb に寄せる。解釈不能なら null（DocumentApp の「色の値が無効」を防ぐ） */
+function normalizeColorForGAS_(raw) {
+  if (raw == null) return null;
+  var c = String(raw).trim();
+  if (!c) return null;
+  var lc = c.toLowerCase();
+  if (lc === 'transparent' || lc === 'inherit') return null;
+
+  var hex6 = /^#([0-9a-f]{6})$/i.exec(c);
+  if (hex6) return '#' + hex6[1].toLowerCase();
+  var hex3 = /^#([0-9a-f]{3})$/i.exec(c);
+  if (hex3) {
+    var h = hex3[1].toLowerCase();
+    return '#' + h.charAt(0) + h.charAt(0) + h.charAt(1) + h.charAt(1) + h.charAt(2) + h.charAt(2);
+  }
+  var rgb = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i.exec(c);
+  if (rgb) {
+    function toHexByte(n) {
+      var x = Math.max(0, Math.min(255, parseInt(n, 10)));
+      var t = x.toString(16);
+      return t.length === 1 ? '0' + t : t;
+    }
+    return '#' + toHexByte(rgb[1]) + toHexByte(rgb[2]) + toHexByte(rgb[3]);
+  }
+  var named = {
+    red: '#ff0000', blue: '#0000ff', green: '#008000', purple: '#800080', gray: '#808080', grey: '#808080',
+    black: '#000000', white: '#ffffff', orange: '#ffa500', yellow: '#ffff00', pink: '#ffc0cb',
+    lightgreen: '#90ee90', lightblue: '#add8e6', brown: '#a52a2a', navy: '#000080', maroon: '#800000',
+    lime: '#00ff00', cyan: '#00ffff', magenta: '#ff00ff', silver: '#c0c0c0', gold: '#ffd700', indigo: '#4b0082',
+    violet: '#ee82ee', coral: '#ff7f50', salmon: '#fa8072', khaki: '#f0e68c', lavender: '#e6e6fa'
+  };
+  if (named[lc]) return named[lc];
+  return null;
+}
+
+function setTextForegroundSafe_(textElem, color) {
+  var hex = normalizeColorForGAS_(color);
+  if (!hex) return;
+  try {
+    textElem.setForegroundColor(hex);
+  } catch (e) {}
+}
+
+function setTextBackgroundSafe_(textElem, color) {
+  var hex = normalizeColorForGAS_(color);
+  if (!hex) return;
+  try {
+    textElem.setBackgroundColor(hex);
+  } catch (e) {}
+}
+
 function getParentFolderId_() {
   const scriptId = ScriptApp.getScriptId();
   const cache = CacheService.getScriptCache();
@@ -471,8 +522,8 @@ function enqueueEssay(payload) {
       p.setFontSize(14);
       highlightData.forEach(run => {
         const textElem = p.appendText(run.text);
-        if (run.color) textElem.setForegroundColor(run.color);
-        if (run.bg) textElem.setBackgroundColor(run.bg);
+        setTextForegroundSafe_(textElem, run.color);
+        setTextBackgroundSafe_(textElem, run.bg);
         if (run.bold) textElem.setBold(true);
         if (run.italic) textElem.setItalic(true);
         if (run.underline) textElem.setUnderline(true);
@@ -509,8 +560,8 @@ function enqueueEssay(payload) {
     p.setFontSize(13);
     feedbackData.forEach(run => {
       const textElem = p.appendText(run.text);
-      if (run.color) textElem.setForegroundColor(run.color);
-      if (run.bg) textElem.setBackgroundColor(run.bg);
+      setTextForegroundSafe_(textElem, run.color);
+      setTextBackgroundSafe_(textElem, run.bg);
       if (run.bold) textElem.setBold(true);
       if (run.italic) textElem.setItalic(true);
       if (run.underline) textElem.setUnderline(true);

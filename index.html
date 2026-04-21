@@ -785,6 +785,11 @@
       updateSelectionVisuals();
     }
 
+    function hasHighlightWordSpans() {
+      const container = $('highlightedArea');
+      return !!(container && container.querySelector('.word'));
+    }
+
     function updateSelectionVisuals() {
       const mode = $('selectionModeSwitch') ? $('selectionModeSwitch').getAttribute('data-state') : '1';
       const container = $('highlightedArea');
@@ -807,7 +812,8 @@
         }
       }
       
-      if (firstSelected !== -1) {
+      // ハイライト済みの語があるときは、選択形式の切り替えだけでツールバーを閉じない
+      if (hasHighlightWordSpans() || firstSelected !== -1) {
         $('styleToolbar').style.display = 'flex';
       } else {
         $('styleToolbar').style.display = 'none';
@@ -881,15 +887,40 @@
       }
     }
 
+    /** DocumentApp は rgb()/色名などで「色の値が無効」になりやすいので #rrggbb に揃える */
+    function cssColorToHex(cssVal, prop) {
+      if (cssVal == null || cssVal === '') return null;
+      const s = String(cssVal).trim();
+      if (!s || /^transparent$/i.test(s) || /^inherit$/i.test(s)) return null;
+      if (/^#[0-9a-fA-F]{6}$/.test(s)) return s.toLowerCase();
+      if (/^#[0-9a-fA-F]{3}$/.test(s)) {
+        const r = s[1], g = s[2], b = s[3];
+        return ('#' + r + r + g + g + b + b).toLowerCase();
+      }
+      const probe = document.createElement('span');
+      probe.style.cssText = 'position:absolute;left:-9999px;top:0;opacity:0;pointer-events:none;';
+      if (prop === 'bg') probe.style.backgroundColor = s;
+      else probe.style.color = s;
+      document.body.appendChild(probe);
+      const resolved = getComputedStyle(probe)[prop === 'bg' ? 'backgroundColor' : 'color'];
+      document.body.removeChild(probe);
+      const m = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(resolved);
+      if (!m) return null;
+      const h = (n) => Math.max(0, Math.min(255, parseInt(n, 10))).toString(16).padStart(2, '0');
+      return '#' + h(m[1]) + h(m[2]) + h(m[3]);
+    }
+
     function getHighlightData() {
       const container = $('highlightedArea');
       if (container.innerText.includes('添削後文を入力して')) return null;
       const runs = [];
       Array.from(container.children).forEach(span => {
+        const rawColor = span.style.color;
+        const rawBg = span.style.backgroundColor;
         runs.push({
           text: span.textContent,
-          color: span.style.color || null,
-          bg: span.style.backgroundColor || null,
+          color: cssColorToHex(rawColor, 'color'),
+          bg: cssColorToHex(rawBg, 'bg'),
           bold: span.style.fontWeight === 'bold',
           italic: span.style.fontStyle === 'italic',
           underline: span.style.textDecoration === 'underline' || span.style.textDecoration.includes('underline')
