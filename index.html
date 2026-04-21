@@ -664,8 +664,8 @@
           const style = window.getComputedStyle(node);
           
           if (tag === 'b' || tag === 'strong' || style.fontWeight === 'bold' || parseInt(style.fontWeight) >= 700) newStyle.bold = true;
-          if (tag === 'i' || tag === 'em' || style.fontStyle === 'italic') newStyle.italic = true;
-          if (tag === 'u' || style.textDecoration.includes('underline')) newStyle.underline = true;
+          if (tag === 'i' || tag === 'em' || style.fontStyle === 'italic' || style.fontStyle === 'oblique') newStyle.italic = true;
+          if (tag === 'u' || (style.textDecoration && style.textDecoration.includes('underline'))) newStyle.underline = true;
           
           Array.from(node.childNodes).forEach(child => traverse(child, newStyle));
           
@@ -884,7 +884,46 @@
       if (type === 'underline') w.style.textDecoration = w.style.textDecoration === 'underline' ? 'none' : 'underline';
       if (type === 'clear') {
          w.style.color = ''; w.style.backgroundColor = ''; w.style.fontWeight = ''; w.style.fontStyle = ''; w.style.textDecoration = '';
+         w.style.fontSize = ''; w.style.fontFamily = '';
       }
+    }
+
+    function primaryFontFamily(cssStack) {
+      if (!cssStack || typeof cssStack !== 'string') return null;
+      const part = cssStack.split(',')[0].trim().replace(/^["']+|["']+$/g, '');
+      return part || null;
+    }
+
+    /** 96dpi 前提で px → pt（Google ドキュメント PDF と画面の大きさ感を揃える） */
+    function pxToPt(px) {
+      if (px == null || isNaN(px)) return null;
+      const pt = (px * 72) / 96;
+      return Math.round(pt * 10) / 10;
+    }
+
+    function spanIsBold(span) {
+      const w = span.style.fontWeight;
+      if (w === 'bold' || w === 'bolder') return true;
+      if (w && !isNaN(parseInt(w, 10)) && parseInt(w, 10) >= 600) return true;
+      const cw = getComputedStyle(span).fontWeight;
+      if (cw === 'bold' || cw === 'bolder') return true;
+      const n = parseInt(cw, 10);
+      return !isNaN(n) && n >= 600;
+    }
+
+    function spanIsItalic(span) {
+      const s = span.style.fontStyle;
+      if (s === 'italic' || s === 'oblique') return true;
+      const cs = getComputedStyle(span).fontStyle;
+      return cs === 'italic' || cs === 'oblique';
+    }
+
+    function spanIsUnderline(span) {
+      const td = span.style.textDecorationLine || span.style.textDecoration || '';
+      if (td && String(td).includes('underline')) return true;
+      const c = getComputedStyle(span);
+      const ctd = c.textDecorationLine || c.textDecoration || '';
+      return String(ctd).includes('underline');
     }
 
     /** DocumentApp は rgb()/色名などで「色の値が無効」になりやすいので #rrggbb に揃える */
@@ -917,13 +956,19 @@
       Array.from(container.children).forEach(span => {
         const rawColor = span.style.color;
         const rawBg = span.style.backgroundColor;
+        const cs = getComputedStyle(span);
+        const fsPx = parseFloat(cs.fontSize);
+        const fontSizePt = pxToPt(fsPx);
+        const fontFamily = primaryFontFamily(cs.fontFamily);
         runs.push({
           text: span.textContent,
           color: cssColorToHex(rawColor, 'color'),
           bg: cssColorToHex(rawBg, 'bg'),
-          bold: span.style.fontWeight === 'bold',
-          italic: span.style.fontStyle === 'italic',
-          underline: span.style.textDecoration === 'underline' || span.style.textDecoration.includes('underline')
+          bold: spanIsBold(span),
+          italic: spanIsItalic(span),
+          underline: spanIsUnderline(span),
+          fontSizePt: fontSizePt != null ? Math.min(36, Math.max(6, fontSizePt)) : null,
+          fontFamily: fontFamily || null
         });
       });
       return runs;
@@ -943,6 +988,8 @@
         if (run.bold) span.style.fontWeight = 'bold';
         if (run.italic) span.style.fontStyle = 'italic';
         if (run.underline) span.style.textDecoration = 'underline';
+        if (run.fontSizePt != null && !isNaN(run.fontSizePt)) span.style.fontSize = run.fontSizePt + 'pt';
+        if (run.fontFamily) span.style.fontFamily = run.fontFamily;
         
         span.onclick = () => toggleSelectWord(span);
         container.appendChild(span);

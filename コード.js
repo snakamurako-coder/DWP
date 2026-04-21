@@ -111,6 +111,28 @@ function setTextBackgroundSafe_(textElem, color) {
   } catch (e) {}
 }
 
+function setTextFontSizeSafe_(textElem, pt) {
+  var n = parseFloat(pt);
+  if (isNaN(n) || n <= 0) return;
+  n = Math.min(36, Math.max(6, n));
+  try {
+    textElem.setFontSize(n);
+  } catch (e) {}
+}
+
+function setTextFontFamilySafe_(textElem, family) {
+  if (!family) return;
+  var name = String(family).trim();
+  if (!name) return;
+  try {
+    textElem.setFontFamily(name);
+  } catch (e) {
+    try {
+      textElem.setFontFamily('Arial');
+    } catch (e2) {}
+  }
+}
+
 function getParentFolderId_() {
   const scriptId = ScriptApp.getScriptId();
   const cache = CacheService.getScriptCache();
@@ -527,6 +549,8 @@ function enqueueEssay(payload) {
         if (run.bold) textElem.setBold(true);
         if (run.italic) textElem.setItalic(true);
         if (run.underline) textElem.setUnderline(true);
+        if (run.fontSizePt != null) setTextFontSizeSafe_(textElem, run.fontSizePt);
+        if (run.fontFamily) setTextFontFamilySafe_(textElem, run.fontFamily);
       });
       body.appendParagraph("\n");
     } else {
