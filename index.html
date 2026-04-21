@@ -680,10 +680,46 @@
     }
 
     // --- ハイライト機能と差分アルゴリズム ---
+    function makeTokenKey(token) {
+      return `${token.index}::${token.text}`;
+    }
+
+    function snapshotManualStyles() {
+      const container = $('highlightedArea');
+      const map = new Map();
+      if (!container) return map;
+      Array.from(container.querySelectorAll('.word')).forEach((span, idx) => {
+        const key = span.dataset.tokenKey || `legacy-${idx}::${span.textContent}`;
+        map.set(key, {
+          color: span.style.color || '',
+          backgroundColor: span.style.backgroundColor || '',
+          fontWeight: span.style.fontWeight || '',
+          fontStyle: span.style.fontStyle || '',
+          textDecoration: span.style.textDecoration || '',
+          fontSize: span.style.fontSize || '',
+          fontFamily: span.style.fontFamily || ''
+        });
+      });
+      return map;
+    }
+
+    function applySnapshotStyle(span, snap) {
+      if (!span || !snap) return false;
+      span.style.color = snap.color || '';
+      span.style.backgroundColor = snap.backgroundColor || '';
+      span.style.fontWeight = snap.fontWeight || '';
+      span.style.fontStyle = snap.fontStyle || '';
+      span.style.textDecoration = snap.textDecoration || '';
+      span.style.fontSize = snap.fontSize || '';
+      span.style.fontFamily = snap.fontFamily || '';
+      return true;
+    }
+
     $('diffBtn').onclick = () => {
       const orig = $('message').value;
       let corrText = "";
       let charStyles = [];
+      const previousStyleMap = snapshotManualStyles();
       
       if ($('inheritHighlightStyles').checked) {
         const corrRuns = extractRichTextRuns($('correctedText'));
@@ -737,7 +773,10 @@
         const span = document.createElement('span');
         span.textContent = token.text;
         span.className = 'word';
-        if (token.type === 'insert' && token.text.trim().length > 0) {
+        const tokenKey = makeTokenKey(token);
+        span.dataset.tokenKey = tokenKey;
+        const restored = applySnapshotStyle(span, previousStyleMap.get(tokenKey));
+        if (!restored && token.type === 'insert' && token.text.trim().length > 0) {
           span.style.color = 'red';
         }
         if (token.text.trim().length === 0) {
@@ -745,7 +784,7 @@
         }
         
         // 継承されたスタイルを適用
-        if ($('inheritHighlightStyles').checked && token.index < charStyles.length) {
+        if (!restored && $('inheritHighlightStyles').checked && token.index < charStyles.length) {
           const style = charStyles[token.index];
           if (style.bold) span.style.fontWeight = 'bold';
           if (style.italic) span.style.fontStyle = 'italic';

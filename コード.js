@@ -97,23 +97,23 @@ function normalizeColorForGAS_(raw) {
 
 function setTextForegroundSafe_(textElem, color) {
   var hex = normalizeColorForGAS_(color);
-  if (!hex) return;
   try {
-    textElem.setForegroundColor(hex);
+    // runごとに必ず前景色を確定させる（未指定時は黒へ戻す）
+    textElem.setForegroundColor(hex || '#000000');
   } catch (e) {}
 }
 
 function setTextBackgroundSafe_(textElem, color) {
   var hex = normalizeColorForGAS_(color);
-  if (!hex) return;
   try {
-    textElem.setBackgroundColor(hex);
+    // 可能なら背景色を解除（null が不可の環境では何もしない）
+    textElem.setBackgroundColor(hex || null);
   } catch (e) {}
 }
 
 function setTextFontSizeSafe_(textElem, pt) {
   var n = parseFloat(pt);
-  if (isNaN(n) || n <= 0) return;
+  if (isNaN(n) || n <= 0) n = 14;
   n = Math.min(36, Math.max(6, n));
   try {
     textElem.setFontSize(n);
@@ -121,9 +121,8 @@ function setTextFontSizeSafe_(textElem, pt) {
 }
 
 function setTextFontFamilySafe_(textElem, family) {
-  if (!family) return;
-  var name = String(family).trim();
-  if (!name) return;
+  var name = family ? String(family).trim() : '';
+  if (!name) name = 'Arial';
   try {
     textElem.setFontFamily(name);
   } catch (e) {
@@ -556,8 +555,8 @@ function enqueueEssay(payload) {
         setTextForegroundSafe_(textElem, run.color);
         setTextBackgroundSafe_(textElem, run.bg);
         setTextDecorationsSafe_(textElem, run);
-        if (run.fontSizePt != null) setTextFontSizeSafe_(textElem, run.fontSizePt);
-        if (run.fontFamily) setTextFontFamilySafe_(textElem, run.fontFamily);
+        setTextFontSizeSafe_(textElem, run.fontSizePt);
+        setTextFontFamilySafe_(textElem, run.fontFamily);
       });
       body.appendParagraph("\n");
     } else {
