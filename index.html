@@ -132,8 +132,9 @@
     <div class="section-title">Step 1: 原文の作成</div>
     <div style="display: flex; gap: 10px; margin-bottom: 15px;">
       <select id="gradeSelect" style="margin-bottom:0;"><option value="">学年・科目を選択</option></select>
-      <button onclick="refreshGrades()" id="refBtn" class="btn" style="background:#e2e8f0; padding:0 15px;">更新</button>
+      <button onclick="refreshGrades()" id="refBtn" class="btn" style="background:#e2e8f0; padding:0 15px;" title="学年一覧と、選択中の教科の問題一覧を最新化します">更新</button>
     </div>
+    <p class="note" style="margin-top:-5px;">※「更新」で Assignments フォルダと、選択中の教科シート内の問題一覧を再取得します。</p>
     <select id="problemSelect" disabled><option value="">問題を選択</option></select>
     <div id="problemBody" class="viewbox">（問題文が表示されます）</div>
 
@@ -634,19 +635,25 @@
     function refreshGrades() {
       const prevGrade = $('gradeSelect').value;
       const prevProblem = $('problemSelect').value;
+      $('refBtn').disabled = true;
       $('refBtn').textContent = '...';
-      callGasApi('refreshGradesCache', { spreadsheetId: prevGrade || null }).then(res => {
-        populateGrades(res.grades || []);
+      callGasApi('refreshGradesCache').then(res => {
+        const grades = Array.isArray(res) ? res : (res.grades || []);
+        populateGrades(grades);
         if (prevGrade && Array.from($('gradeSelect').options).some(o => o.value === prevGrade)) {
           $('gradeSelect').value = prevGrade;
         }
-        if (res.problems) {
-          return populateProblems(res.problems, prevProblem);
+        const gid = $('gradeSelect').value;
+        if (gid) {
+          // 「更新」時のみ force:true で Assignments シートを再読込
+          return loadProblems(gid, true, prevProblem);
         }
-        if (!prevGrade) resetProblemSelect();
+        resetProblemSelect();
       }).then(() => {
+        $('refBtn').disabled = false;
         $('refBtn').textContent = '更新';
       }).catch(err => {
+        $('refBtn').disabled = false;
         $('refBtn').textContent = '更新';
         alert('更新エラー: ' + err.message);
       });

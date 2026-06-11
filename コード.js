@@ -23,7 +23,7 @@ function doPost(e) {
         data = getProblem(params.spreadsheetId, params.rowIndex);
         break;
       case 'refreshGradesCache':
-        data = refreshGradesCache(params.spreadsheetId);
+        data = refreshGradesCache();
         break;
       case 'saveBackupToCloud':
         data = saveBackupToCloud(params.payload);
@@ -284,13 +284,9 @@ function getProblem(spreadsheetId, rowIndex) {
   return { serial: _s(row[col.serial-1]), title: _s(row[col.title-1]), body: _s(row[col.body-1]), note: _s(row[col.note-1]), label: `${_s(row[col.serial-1])} ${_s(row[col.title-1])}` };
 }
 
-function refreshGradesCache(spreadsheetId) {
-  const grades = listGradeSheetsInAssignments(true);
-  const result = { grades };
-  if (spreadsheetId) {
-    result.problems = listProblems(spreadsheetId, true);
-  }
-  return result;
+/** 学年フォルダ一覧のみ強制再取得（問題一覧はフロントの「更新」から listProblems(force:true) で取得） */
+function refreshGradesCache() {
+  return { grades: listGradeSheetsInAssignments(true) };
 }
 
 /*** === アプリ初期化とバッチ処理 === ***/
