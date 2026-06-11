@@ -23,7 +23,7 @@ function doPost(e) {
         data = getProblem(params.spreadsheetId, params.rowIndex);
         break;
       case 'refreshGradesCache':
-        data = refreshGradesCache();
+        data = refreshGradesCache(params.spreadsheetId);
         break;
       case 'saveBackupToCloud':
         data = saveBackupToCloud(params.payload);
@@ -284,7 +284,14 @@ function getProblem(spreadsheetId, rowIndex) {
   return { serial: _s(row[col.serial-1]), title: _s(row[col.title-1]), body: _s(row[col.body-1]), note: _s(row[col.note-1]), label: `${_s(row[col.serial-1])} ${_s(row[col.title-1])}` };
 }
 
-function refreshGradesCache() { return listGradeSheetsInAssignments(true); }
+function refreshGradesCache(spreadsheetId) {
+  const grades = listGradeSheetsInAssignments(true);
+  const result = { grades };
+  if (spreadsheetId) {
+    result.problems = listProblems(spreadsheetId, true);
+  }
+  return result;
+}
 
 /*** === アプリ初期化とバッチ処理 === ***/
 

@@ -364,13 +364,7 @@
 
       $('gradeSelect').onchange = () => {
         const gid = $('gradeSelect').value;
-        if(!gid) return;
-        $('problemSelect').innerHTML = '<option>読み込み中...</option>';
-        callGasApi('listProblems', { spreadsheetId: gid, force: false }).then(arr => {
-          $('problemSelect').innerHTML = '<option value="">問題を選択</option>';
-          arr.forEach(p => $('problemSelect').appendChild(new Option(p.label, p.rowIndex)));
-          $('problemSelect').disabled = false;
-        });
+        loadProblems(gid, false);
       };
 
       $('problemSelect').onchange = () => {
@@ -602,10 +596,55 @@
       arr.forEach(g => sel.appendChild(new Option(g.name, g.id)));
     }
 
+    function populateProblems(arr, keepRowIndex) {
+      $('problemSelect').innerHTML = '<option value="">問題を選択</option>';
+      arr.forEach(p => $('problemSelect').appendChild(new Option(p.label, p.rowIndex)));
+      $('problemSelect').disabled = false;
+      if (keepRowIndex) {
+        $('problemSelect').value = keepRowIndex;
+        if ($('problemSelect').value === String(keepRowIndex)) {
+          return callGasApi('getProblem', {
+            spreadsheetId: $('gradeSelect').value,
+            rowIndex: keepRowIndex
+          }).then(meta => {
+            selectedProblemMeta = meta;
+            $('problemBody').textContent = meta.body;
+          });
+        }
+      }
+      return Promise.resolve();
+    }
+
+    function resetProblemSelect() {
+      $('problemSelect').innerHTML = '<option value="">問題を選択</option>';
+      $('problemSelect').disabled = true;
+      $('problemBody').textContent = '（問題文が表示されます）';
+      selectedProblemMeta = null;
+    }
+
+    function loadProblems(spreadsheetId, force, keepRowIndex) {
+      if (!spreadsheetId) {
+        resetProblemSelect();
+        return Promise.resolve();
+      }
+      $('problemSelect').innerHTML = '<option>読み込み中...</option>';
+      return callGasApi('listProblems', { spreadsheetId, force }).then(arr => populateProblems(arr, keepRowIndex));
+    }
+
     function refreshGrades() {
+      const prevGrade = $('gradeSelect').value;
+      const prevProblem = $('problemSelect').value;
       $('refBtn').textContent = '...';
-      callGasApi('refreshGradesCache').then(arr => {
-        populateGrades(arr);
+      callGasApi('refreshGradesCache', { spreadsheetId: prevGrade || null }).then(res => {
+        populateGrades(res.grades || []);
+        if (prevGrade && Array.from($('gradeSelect').options).some(o => o.value === prevGrade)) {
+          $('gradeSelect').value = prevGrade;
+        }
+        if (res.problems) {
+          return populateProblems(res.problems, prevProblem);
+        }
+        if (!prevGrade) resetProblemSelect();
+      }).then(() => {
         $('refBtn').textContent = '更新';
       }).catch(err => {
         $('refBtn').textContent = '更新';
@@ -666,6 +705,14 @@
           if (tag === 'b' || tag === 'strong' || style.fontWeight === 'bold' || parseInt(style.fontWeight) >= 700) newStyle.bold = true;
           if (tag === 'i' || tag === 'em' || style.fontStyle === 'italic' || style.fontStyle === 'oblique') newStyle.italic = true;
           if (tag === 'u' || (style.textDecoration && style.textDecoration.includes('underline'))) newStyle.underline = true;
+          if (style.color) {
+            const hexColor = cssColorToHex(style.color, 'color');
+            if (hexColor) newStyle.color = hexColor;
+          }
+          if (style.backgroundColor) {
+            const hexBg = cssColorToHex(style.backgroundColor, 'bg');
+            if (hexBg) newStyle.bg = hexBg;
+          }
           
           Array.from(node.childNodes).forEach(child => traverse(child, newStyle));
           
